@@ -98,6 +98,7 @@ async function handleRegister(request, response, db) {
     passwordHash,
     role: "member",
     cardId: null,
+    profileVisible: true,
     mustChangePassword: false,
     isActive: true,
     createdAt: now,

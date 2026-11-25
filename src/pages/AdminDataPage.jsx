@@ -6,8 +6,7 @@ import { apiRequest } from "../lib/api.js";
 const EMPTY_STUDENT = {
   nama: "",
   jabatan: "Siswa",
-  hobi: "",
-  catatan: "",
+  facts: [],
   foto: "",
   portfolio: "",
 };
@@ -24,13 +23,16 @@ const EMPTY_VIDEO = {
   youtubeUrl: "",
 };
 
+function getInitialKind() {
+  const kind = new URLSearchParams(window.location.hash.split("?")[1] || "").get("kind");
+  return ["students", "teachers", "videos"].includes(kind) ? kind : "students";
+}
+
 function getFields(kind) {
   if (kind === "students") {
     return [
         ["nama", "Nama siswa", "text"],
         ["jabatan", "Jabatan", "text"],
-        ["hobi", "Hobi", "text"],
-        ["catatan", "Catatan", "textarea"],
         ["foto", "Foto (path asset/ atau URL HTTPS)", "text"],
         ["portfolio", "URL portfolio (opsional)", "url"],
       ];
@@ -53,7 +55,7 @@ function getFields(kind) {
 
 export function AdminDataPage() {
   const { user } = useAuth();
-  const [kind, setKind] = useState("students");
+  const [kind, setKind] = useState(getInitialKind);
   const [records, setRecords] = useState([]);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
@@ -124,8 +126,7 @@ export function AdminDataPage() {
         ? {
             nama: record.nama,
             jabatan: record.jabatan,
-            hobi: record.hobi,
-            catatan: record.catatan,
+            facts: record.facts || [],
             foto: record.foto,
             portfolio: record.portfolio || "",
           }
@@ -153,8 +154,22 @@ export function AdminDataPage() {
     setError("");
     setNotice("");
     const payload = Object.fromEntries(
-      Object.entries(form).map(([key, value]) => [key, value.trim()]),
+      Object.entries(form)
+        .filter(([key]) => key !== "facts")
+        .map(([key, value]) => [key, value.trim()]),
     );
+    if (kind === "students") {
+      payload.facts = form.facts
+        .filter(fact => fact.label.trim() && fact.value.trim())
+        .map(fact => ({ label: fact.label.trim(), value: fact.value.trim() }));
+      if (form.facts.some(fact =>
+        Boolean(fact.label.trim()) !== Boolean(fact.value.trim()),
+      )) {
+        setError("Isi label dan fakta pada setiap slot yang digunakan.");
+        setSaving(false);
+        return;
+      }
+    }
     try {
       const base = `/api/admin/${kind}`;
       await apiRequest(
@@ -190,13 +205,23 @@ export function AdminDataPage() {
   }
 
   return (
-    <>
-      <section className="container page-hero">
-        <span className="route-label">/admin/data</span>
-        <h1>Kelola Data</h1>
-        <p>Kelola informasi siswa, guru, dan video yang ditampilkan di website kelas.</p>
-      </section>
       <section className="container admin-data-page" aria-busy={status === "loading" || saving}>
+        <nav className="dashboard-sidebar" aria-label="Navigasi dashboard admin">
+          <a href="#/admin">Ringkasan</a>
+          <a href="#/admin/data?kind=students" aria-current={kind === "students" ? "page" : undefined}>Siswa</a>
+          <a href="#/admin/data?kind=teachers" aria-current={kind === "teachers" ? "page" : undefined}>Guru</a>
+          <a href="#/galeri">Galeri</a>
+          <a href="#/admin/data?kind=videos" aria-current={kind === "videos" ? "page" : undefined}>Video</a>
+          <a href="#/admin?tab=accounts">Akun siswa</a>
+          <a href="#/admin?tab=schedule">Jadwal pelajaran</a>
+          <a href="#/admin?tab=duties">Piket kelas</a>
+        </nav>
+        <div className="admin-data-main">
+          <header className="dashboard-heading">
+            <span className="route-label">/admin/data</span>
+            <h1>{kind === "students" ? "Data siswa" : kind === "teachers" ? "Data guru" : "Video"}</h1>
+            <p>Kelola informasi yang tampil di website kelas.</p>
+          </header>
         <div className="admin-data-tabs" role="group" aria-label="Jenis data">
           <button type="button" className="button-secondary" aria-pressed={kind === "students"} onClick={() => chooseKind("students")}>
             Data siswa
@@ -236,6 +261,16 @@ export function AdminDataPage() {
                   const active = kind === "students" ? record.isPublished : record.isActive;
                   return (
                     <li key={record.id} className={!active ? "is-archived" : ""}>
+                      {kind === "videos" ? (
+                        <img
+                          className="admin-record-thumb"
+                          src={`https://img.youtube.com/vi/${encodeURIComponent(record.youtubeId)}/hqdefault.jpg`}
+                          alt=""
+                          loading="lazy"
+                        />
+                      ) : (
+                        <img className="admin-record-thumb" src={record.avatar?.url || record.foto} alt="" loading="lazy" />
+                      )}
                       <div>
                         <strong>{record.nama || record.judul}</strong>
                         <span>
@@ -307,6 +342,45 @@ export function AdminDataPage() {
                   )}
                 </label>
               ))}
+              {kind === "students" && (
+                <fieldset className="card-facts-fields">
+                  <legend>Fakta siswa (maksimal 5)</legend>
+                  {Array.from({ length: 5 }, (_, index) => {
+                    const fact = form.facts[index] || { label: "", value: "" };
+                    return (
+                      <div className="card-fact-editor" key={index}>
+                        <span className="card-fact-number">Fakta {index + 1}</span>
+                        <label htmlFor={`admin-fact-label-${index}`}>Label</label>
+                        <input
+                          id={`admin-fact-label-${index}`}
+                          maxLength={40}
+                          value={fact.label}
+                          onChange={event => setForm(current => ({
+                            ...current,
+                            facts: Array.from({ length: 5 }, (_, factIndex) => ({
+                              ...(current.facts[factIndex] || { label: "", value: "" }),
+                              ...(factIndex === index ? { label: event.target.value } : {}),
+                            })),
+                          }))}
+                        />
+                        <label htmlFor={`admin-fact-value-${index}`}>Isi fakta</label>
+                        <input
+                          id={`admin-fact-value-${index}`}
+                          maxLength={300}
+                          value={fact.value}
+                          onChange={event => setForm(current => ({
+                            ...current,
+                            facts: Array.from({ length: 5 }, (_, factIndex) => ({
+                              ...(current.facts[factIndex] || { label: "", value: "" }),
+                              ...(factIndex === index ? { value: event.target.value } : {}),
+                            })),
+                          }))}
+                        />
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              )}
               {canManageMedia && !isNew && (
                 <>
                   <MediaUploader
@@ -352,7 +426,7 @@ export function AdminDataPage() {
             </form>
           )}
         </div>
+        </div>
       </section>
-    </>
   );
 }

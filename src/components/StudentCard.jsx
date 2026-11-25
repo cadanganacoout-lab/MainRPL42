@@ -16,10 +16,7 @@ export function StudentCard({ student }) {
       background={student.background?.url}
       role={student.jabatan}
       lead={isClassOfficer(student)}
-      rows={[
-        ["Hobi", student.hobi],
-        ["Catatan", student.catatan],
-      ]}
+      rows={(student.facts || []).map(fact => [fact.label, fact.value])}
       emptyNote="Profil belum dilengkapi."
       action={
         isHttpUrl(portfolio)

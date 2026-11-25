@@ -1,9 +1,8 @@
-const { randomInt } = require("node:crypto");
 const { createInterface } = require("node:readline/promises");
 const { ObjectId } = require("mongodb");
 const { closeDb, getDb } = require("../../api/_lib/db");
 const { readServerEnv } = require("../../api/_lib/env");
-const { hashPassword } = require("../../api/_lib/password");
+const { generateTemporaryPassword, hashPassword } = require("../../api/_lib/password");
 const { destroyAllSessions } = require("../../api/_lib/session");
 const {
   displayNameSchema,
@@ -11,9 +10,6 @@ const {
   userDocumentSchema,
   usernameSchema,
 } = require("../../api/_lib/schemas");
-
-const TEMP_PASSWORD_ALPHABET =
-  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%_-+";
 
 class AdminCliError extends Error {}
 
@@ -109,13 +105,6 @@ function normalizeAccountInput(username, displayName) {
   } catch {
     throw new AdminCliError("Username or display name is invalid.");
   }
-}
-
-function generateTemporaryPassword() {
-  return Array.from(
-    { length: 16 },
-    () => TEMP_PASSWORD_ALPHABET[randomInt(TEMP_PASSWORD_ALPHABET.length)],
-  ).join("");
 }
 
 async function makeUser({ username, displayName, role, cardId = null, now }) {

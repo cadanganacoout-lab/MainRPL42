@@ -53,20 +53,27 @@ async function run() {
     if (!data) {
       missing.push("window.XIRPL1_DATA");
     } else {
-      for (const key of ["SISWA", "GURU", "GALERI", "VIDEO"]) {
-        if (!Array.isArray(data[key])) {
-          messages.push({ type: "error", text: `${key} must be an array.` });
-          continue;
-        }
-        const ids = data[key].map(item => item.id).filter(Boolean);
-        if (new Set(ids).size !== ids.length) {
-          messages.push({ type: "error", text: `IDs in ${key} must be unique.` });
+      for (const key of [
+        "SISWA",
+        "GURU",
+        "JADWAL",
+        "JADWAL_LAMA",
+        "PIKET",
+        "PIKET_LAMA",
+        "GALERI",
+        "VIDEO",
+      ]) {
+        if (Object.hasOwn(data, key)) {
+          messages.push({
+            type: "error",
+            text: `${key} must be loaded from the database, not js/data.js.`,
+          });
         }
       }
-      if (data.GALERI.length === 0) {
+      if (!data.SITE || !data.UI || !Array.isArray(data.HARI_LIST)) {
         messages.push({
           type: "error",
-          text: "Galeri minimal harus memiliki satu foto.",
+          text: "Site configuration is incomplete.",
         });
       }
     }

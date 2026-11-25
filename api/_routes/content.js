@@ -10,21 +10,27 @@ const {
 } = require("../_lib/repos/cards");
 const {
   findProfileUserByUsername,
-  updateDisplayNameForUser,
+  updateProfileForUser,
 } = require("../_lib/repos/users");
 const {
   displayNameSchema,
   toPublicCard,
+  toPublicMember,
   toPublicProfile,
   usernameSchema,
 } = require("../_lib/schemas");
 
 const profileUpdateBodySchema = z
-  .object({ displayName: displayNameSchema })
-  .strict();
+  .object({
+    displayName: displayNameSchema.optional(),
+    profileVisible: z.boolean().optional(),
+  })
+  .strict()
+  .refine(value => Object.keys(value).length > 0);
 
 function isContentRoute(route) {
   return (
+    route === "members" ||
     route === "profile/me" ||
     /^profile\/[^/]+$/.test(route) ||
     /^profiles\/[^/]+$/.test(route)
@@ -42,6 +48,23 @@ function routeParameter(route, prefix) {
 
 async function handleContentRoute({ request, response, route, db }) {
   if (!isContentRoute(route)) return false;
+  if (route === "members") {
+    if (request.method !== "GET") {
+      response.setHeader("Allow", "GET");
+      throw new ApiError(405, "METHOD_NOT_ALLOWED", "Method not allowed.");
+    }
+    const members = await db.collection("users")
+      .find(
+        { role: "member", isActive: true, profileVisible: { $ne: false } },
+        { projection: { displayName: 1, avatar: 1 } },
+      )
+      .sort({ displayName: 1, _id: 1 })
+      .toArray();
+    sendJson(response, 200, { members: members.map(toPublicMember) }, {
+      cacheControl: "public, max-age=30, stale-while-revalidate=60",
+    });
+    return true;
+  }
   const isOwnProfile = route === "profile/me";
   if (request.method !== "GET" && !(isOwnProfile && request.method === "PATCH")) {
     response.setHeader("Allow", isOwnProfile ? "GET, PATCH" : "GET");
@@ -61,10 +84,13 @@ async function handleContentRoute({ request, response, route, db }) {
 
   if (isOwnProfile && request.method === "PATCH") {
     const session = await requireAuth(db, request);
-    if (!["student", "admin"].includes(session.user.role)) {
+    const input = profileUpdateBodySchema.parse(await parseJsonBody(request));
+    if (
+      input.profileVisible !== undefined &&
+      session.user.role !== "member"
+    ) {
       throw new ApiError(403, "FORBIDDEN", "You do not have permission.");
     }
-    const input = profileUpdateBodySchema.parse(await parseJsonBody(request));
     await enforceLimit(
       db,
       response,
@@ -72,15 +98,22 @@ async function handleContentRoute({ request, response, route, db }) {
       10,
       60 * 60,
     );
-    const updatedUser = await updateDisplayNameForUser(
+    const updatedUser = await updateProfileForUser(
       db,
       session.user._id,
-      input.displayName,
+      input,
     );
     if (!updatedUser) {
       throw new ApiError(401, "UNAUTHENTICATED", "Please sign in.");
     }
-    sendJson(response, 200, { user: toPublicProfile(updatedUser) });
+    sendJson(response, 200, {
+      user: {
+        ...toPublicProfile(updatedUser),
+        ...(updatedUser.role === "member"
+          ? { profileVisible: updatedUser.profileVisible !== false }
+          : {}),
+      },
+    });
     return true;
   }
 
@@ -98,7 +131,12 @@ async function handleContentRoute({ request, response, route, db }) {
       }
     }
     sendJson(response, 200, {
-      user: toPublicProfile(session.user),
+      user: {
+        ...toPublicProfile(session.user),
+        ...(session.user.role === "member"
+          ? { profileVisible: session.user.profileVisible !== false }
+          : {}),
+      },
       mustChangePassword: false,
       card,
     });
@@ -110,7 +148,11 @@ async function handleContentRoute({ request, response, route, db }) {
     routeParameter(route, routePrefix),
   );
   const user = await findProfileUserByUsername(db, username);
-  if (!user || user.role === "admin") {
+  if (
+    !user ||
+    user.role === "admin" ||
+    (user.role === "member" && user.profileVisible === false)
+  ) {
     throw new ApiError(404, "NOT_FOUND", "Profile not found.");
   }
 

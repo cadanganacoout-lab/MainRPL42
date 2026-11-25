@@ -28,6 +28,17 @@ const userJsonSchema = {
     createdAt: { bsonType: "date" },
     updatedAt: { bsonType: "date" },
     lastLoginAt: { bsonType: ["date", "null"] },
+    profileVisible: { bsonType: "bool" },
+    avatar: {
+      bsonType: ["object", "null"],
+      required: ["url", "path", "updatedAt"],
+      additionalProperties: false,
+      properties: {
+        url: { bsonType: "string", pattern: "^https://" },
+        path: { bsonType: "string", minLength: 1, maxLength: 512 },
+        updatedAt: { bsonType: "date" },
+      },
+    },
   },
 };
 
@@ -81,6 +92,19 @@ const cardJsonSchema = {
     jabatan: { bsonType: "string", maxLength: 80 },
     hobi: { bsonType: "string", maxLength: 300 },
     catatan: { bsonType: "string", maxLength: 500 },
+    facts: {
+      bsonType: "array",
+      maxItems: 5,
+      items: {
+        bsonType: "object",
+        required: ["label", "value"],
+        additionalProperties: false,
+        properties: {
+          label: { bsonType: "string", minLength: 1, maxLength: 40 },
+          value: { bsonType: "string", minLength: 1, maxLength: 300 },
+        },
+      },
+    },
     foto: { bsonType: "string", minLength: 1, maxLength: 2048 },
     avatar: mediaPointerJsonSchema,
     background: mediaPointerJsonSchema,
@@ -163,6 +187,80 @@ const galleryPhotoJsonSchema = {
   },
 };
 
+const scheduleSlotJsonSchema = {
+  bsonType: ["object", "null"],
+  additionalProperties: false,
+  properties: {
+    mulai: { bsonType: "string", pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" },
+    selesai: { bsonType: "string", pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" },
+    mapel: { bsonType: "string", maxLength: 120 },
+    teacherId: { bsonType: ["string", "null"], pattern: "^g[0-9]{2}$" },
+    text: { bsonType: "string", maxLength: 300 },
+    istirahat: { bsonType: "bool" },
+    label: { bsonType: "string", maxLength: 120 },
+  },
+};
+const dutySlotJsonSchema = {
+  bsonType: ["object", "null"],
+  additionalProperties: false,
+  properties: {
+    studentId: { bsonType: ["string", "null"], pattern: "^s[0-9]{2}$" },
+    text: { bsonType: "string", maxLength: 300 },
+  },
+};
+const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const parities = ["ganjil", "genap"];
+const scheduleDaysJsonSchema = {
+  bsonType: "object",
+  required: days,
+  additionalProperties: false,
+  properties: Object.fromEntries(days.map(day => [
+    day,
+    { bsonType: "array", minItems: 15, maxItems: 15, items: scheduleSlotJsonSchema },
+  ])),
+};
+const legacyScheduleJsonSchema = {
+  bsonType: "object",
+  required: parities,
+  additionalProperties: false,
+  properties: Object.fromEntries(parities.map(parity => [
+    parity,
+    scheduleDaysJsonSchema,
+  ])),
+};
+const dutyDaysJsonSchema = {
+  bsonType: "object",
+  required: days,
+  additionalProperties: false,
+  properties: Object.fromEntries(days.map(day => [
+    day,
+    { bsonType: "array", minItems: 15, maxItems: 15, items: dutySlotJsonSchema },
+  ])),
+};
+const classAgendaJsonSchema = {
+  bsonType: "object",
+  required: ["classId", "className", "academicYear", "schedule", "duties", "createdAt", "updatedAt", "updatedBy"],
+  additionalProperties: false,
+  properties: {
+    _id: { bsonType: "string", enum: ["active"] },
+    classId: { bsonType: "string", pattern: "^[a-z0-9-]{1,40}$" },
+    className: { bsonType: "string", minLength: 1, maxLength: 80 },
+    academicYear: { bsonType: "string", minLength: 1, maxLength: 20 },
+    schedule: {
+      bsonType: "object",
+      required: ["ganjil", "genap"],
+      additionalProperties: false,
+      properties: { ganjil: scheduleDaysJsonSchema, genap: scheduleDaysJsonSchema },
+    },
+    legacySchedule: legacyScheduleJsonSchema,
+    duties: dutyDaysJsonSchema,
+    legacyDuties: dutyDaysJsonSchema,
+    createdAt: { bsonType: "date" },
+    updatedAt: { bsonType: "date" },
+    updatedBy: { bsonType: ["objectId", "null"] },
+  },
+};
+
 const mediaUploadJsonSchema = {
   bsonType: "object",
   required: [
@@ -182,7 +280,7 @@ const mediaUploadJsonSchema = {
   properties: {
     _id: { bsonType: "objectId" },
     actorUserId: { bsonType: "objectId" },
-    targetType: { enum: ["student", "teacher", "gallery"] },
+    targetType: { enum: ["student", "teacher", "member", "gallery"] },
     targetId: { bsonType: "string", minLength: 1, maxLength: 20 },
     mediaType: { enum: ["avatar", "background", "gallery"] },
     bucket: { bsonType: "string", minLength: 1, maxLength: 100 },
@@ -246,7 +344,7 @@ const mediaAuditJsonSchema = {
         "gallery-remove",
       ],
     },
-    targetType: { enum: ["student", "teacher", "gallery"] },
+    targetType: { enum: ["student", "teacher", "member", "gallery"] },
     targetId: { bsonType: "string", minLength: 1, maxLength: 24 },
     mediaType: { enum: ["avatar", "background", "gallery"] },
     createdAt: { bsonType: "date" },
@@ -260,6 +358,7 @@ const COLLECTION_SCHEMAS = {
   teachers: teacherJsonSchema,
   rate_limits: rateLimitJsonSchema,
   gallery_photos: galleryPhotoJsonSchema,
+  class_agendas: classAgendaJsonSchema,
   media_uploads: mediaUploadJsonSchema,
   media_cleanup: mediaCleanupJsonSchema,
   media_audit: mediaAuditJsonSchema,

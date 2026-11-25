@@ -232,7 +232,7 @@ test("inactive, missing, and admin profiles have the same generic not-found resp
   assert.deepEqual(responses[0], responses[2]);
 });
 
-test("profile edits require authentication, student/admin role, same origin, and strict fields", async () => {
+test("profile edits allow own profile fields and member privacy with same-origin protection", async () => {
   const previousOrigin = process.env.APP_ORIGIN;
   process.env.APP_ORIGIN = "https://class.example";
   try {
@@ -251,12 +251,14 @@ test("profile edits require authentication, student/admin role, same origin, and
     const memberResponse = createResponse();
     await apiHandler.createHandler({ getDatabase: async () => memberDb })(
       createRequest("PATCH", "/api/profile/me", {
-        body: { displayName: "Changed Name" },
+        body: { displayName: "Changed Name", profileVisible: false },
         headers: sessionHeaders(memberDb),
       }),
       memberResponse,
     );
-    assert.equal(memberResponse.statusCode, 403);
+    assert.equal(memberResponse.statusCode, 200);
+    assert.equal(memberDb.user.displayName, "Changed Name");
+    assert.equal(memberDb.user.profileVisible, false);
 
     let databaseCalls = 0;
     const csrfResponse = createResponse();
@@ -318,7 +320,7 @@ test("profile edits require authentication, student/admin role, same origin, and
     ]);
     assert.ok(studentDb.calls.userUpdate.$set.updatedAt instanceof Date);
     assert.equal(studentDb.calls.userUpdateFilter._id.equals(studentDb.user._id), true);
-    assert.equal(studentDb.calls.userUpdateFilter.role.$in.includes("member"), false);
+    assert.equal(studentDb.calls.userUpdateFilter.role.$in.includes("member"), true);
     assert.equal(updateResponse.headers["cache-control"], "no-store");
   } finally {
     if (previousOrigin === undefined) delete process.env.APP_ORIGIN;

@@ -71,6 +71,8 @@ const userDocumentSchema = z
     passwordHash: z.string().regex(/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/),
     role: roleSchema,
     cardId: z.instanceof(ObjectId).nullable(),
+    profileVisible: z.boolean().optional(),
+    avatar: mediaPointerSchema.nullable().optional(),
     mustChangePassword: z.boolean(),
     isActive: z.boolean(),
     createdAt: z.date(),
@@ -96,6 +98,10 @@ const cardDocumentSchema = z
     jabatan: z.string().max(80),
     hobi: z.string().max(300),
     catatan: z.string().max(500),
+    facts: z.array(z.object({
+      label: z.string().trim().min(1).max(40),
+      value: z.string().trim().min(1).max(300),
+    }).strict()).max(5).optional(),
     foto: photoPathSchema,
     avatar: mediaPointerSchema.nullable().optional(),
     background: mediaPointerSchema.nullable().optional(),
@@ -162,8 +168,19 @@ const publicProfileSchema = z
     displayName: displayNameSchema,
     role: roleSchema,
     joinedAt: z.date(),
+    avatar: publicMediaSchema.nullable().optional(),
   })
   .strict();
+
+const publicMemberSchema = z.object({
+  displayName: displayNameSchema,
+  avatar: publicMediaSchema.nullable(),
+}).strict();
+
+const publicFactSchema = z.object({
+  label: z.string().min(1).max(40),
+  value: z.string().min(1).max(300),
+}).strict();
 
 const publicCardSchema = z
   .object({
@@ -171,8 +188,7 @@ const publicCardSchema = z
     slug: slugSchema,
     nama: z.string().min(1).max(80),
     jabatan: z.string().max(80),
-    hobi: z.string().max(300),
-    catatan: z.string().max(500),
+    facts: z.array(publicFactSchema).max(5),
     foto: z.string().min(1).max(2048),
     avatar: publicMediaSchema.nullable().optional(),
     background: publicMediaSchema.nullable().optional(),
@@ -214,6 +230,25 @@ function toPublicProfile(user) {
     displayName: user.displayName,
     role: user.role,
     joinedAt: user.createdAt,
+    ...(user.avatar === undefined ? {} : {
+      avatar: user.avatar ? { url: user.avatar.url } : null,
+    }),
+  });
+}
+
+function legacyFacts(card) {
+  return [
+    ["Hobi", card.hobi],
+    ["Catatan", card.catatan],
+  ]
+    .filter(([, value]) => typeof value === "string" && value.trim() && value.trim() !== "-")
+    .map(([label, value]) => ({ label, value: value.trim().slice(0, 300) }));
+}
+
+function toPublicMember(user) {
+  return publicMemberSchema.parse({
+    displayName: user.displayName,
+    avatar: user.avatar ? { url: user.avatar.url } : null,
   });
 }
 
@@ -223,8 +258,7 @@ function toPublicCard(card) {
     slug: card.slug,
     nama: card.nama,
     jabatan: card.jabatan,
-    hobi: card.hobi,
-    catatan: card.catatan,
+    facts: card.facts || legacyFacts(card),
     foto: card.foto,
     ...(card.avatar === undefined ? {} : {
       avatar: card.avatar ? { url: card.avatar.url } : null,
@@ -269,6 +303,7 @@ module.exports = {
   mediaPointerSchema,
   publicProfileSchema,
   publicCardSchema,
+  publicMemberSchema,
   publicTeacherSchema,
   publicMediaSchema,
   publicUserSchema,
@@ -278,6 +313,7 @@ module.exports = {
   teacherIdSchema,
   teacherRoleSchema,
   toPublicCard,
+  toPublicMember,
   toPublicTeacher,
   toPublicProfile,
   toPublicUser,

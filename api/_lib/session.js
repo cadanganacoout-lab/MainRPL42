@@ -18,6 +18,8 @@ const SESSION_USER_PROJECTION = {
   cardId: 1,
   mustChangePassword: 1,
   isActive: 1,
+  profileVisible: 1,
+  avatar: 1,
 };
 
 function hashSessionToken(token) {

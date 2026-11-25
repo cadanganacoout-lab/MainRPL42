@@ -195,24 +195,25 @@ function requestHeaders(db, extra = {}) {
 test("card edit schema allows only the selected fields and validates HTTPS", () => {
   assert.deepEqual(
     cardUpdateBodySchema.parse({
-      hobi: "  Membaca  ",
+      facts: [{ label: " Hobi ", value: "  Membaca  "}],
       portfolio: "https://portfolio.example/",
     }),
     {
-      hobi: "Membaca",
+      facts: [{ label: "Hobi", value: "Membaca" }],
       portfolio: "https://portfolio.example/",
     },
   );
   assert.equal(cardUpdateBodySchema.parse({ portfolio: "" }).portfolio, "");
   assert.equal(
-    cardUpdateBodySchema.safeParse({ hobi: "Membaca", jabatan: "Admin" }).success,
+    cardUpdateBodySchema.safeParse({ facts: [{ label: "Hobi", value: "Membaca" }], jabatan: "Admin" }).success,
     false,
   );
+  assert.equal(cardUpdateBodySchema.safeParse({ hobi: "Membaca" }).success, false);
   assert.equal(
     cardUpdateBodySchema.safeParse({ portfolio: "http://portfolio.example" }).success,
     false,
   );
-  assert.equal(cardUpdateBodySchema.safeParse({ hobi: { $ne: "" } }).success, false);
+  assert.equal(cardUpdateBodySchema.safeParse({ facts: [{ label: "Hobi", value: { $ne: "" } }] }).success, false);
 });
 
 test("public card endpoints return allowlisted data and public cache headers", async () => {
@@ -304,8 +305,10 @@ test("card edits enforce CSRF, ownership, strict fields, and update rate limits"
     await handler(
       createRequest("PATCH", "/api/cards/me", {
         body: {
-          hobi: "  Membaca buku  ",
-          catatan: " Suka belajar ",
+          facts: [
+            { label: "Hobi", value: "  Membaca buku  " },
+            { label: "Catatan", value: " Suka belajar " },
+          ],
           portfolio: "https://portfolio.example/",
         },
         headers: requestHeaders(db),
@@ -315,8 +318,10 @@ test("card edits enforce CSRF, ownership, strict fields, and update rate limits"
     assert.equal(response.statusCode, 200);
     assert.equal(db.calls.cardUpdateFilter._id.equals(db.user.cardId), true);
     assert.equal(db.calls.cardUpdateFilter.ownerUserId.equals(db.user._id), true);
-    assert.deepEqual(db.calls.cardUpdate.$set.hobi, "Membaca buku");
-    assert.deepEqual(db.calls.cardUpdate.$set.catatan, "Suka belajar");
+    assert.deepEqual(db.calls.cardUpdate.$set.facts, [
+      { label: "Hobi", value: "Membaca buku" },
+      { label: "Catatan", value: "Suka belajar" },
+    ]);
     assert.deepEqual(db.calls.cardUpdate.$set.portfolio, "https://portfolio.example/");
     assert.equal("ownerUserId" in JSON.parse(response.body).card, false);
 
@@ -324,7 +329,7 @@ test("card edits enforce CSRF, ownership, strict fields, and update rate limits"
     const invalidResponse = createResponse();
     await handler(
       createRequest("PATCH", "/api/cards/me", {
-        body: { hobi: "Test", ownerUserId: new ObjectId().toHexString() },
+        body: { facts: [{ label: "Hobi", value: "Test" }], ownerUserId: new ObjectId().toHexString() },
         headers: requestHeaders(db),
       }),
       invalidResponse,
@@ -335,7 +340,7 @@ test("card edits enforce CSRF, ownership, strict fields, and update rate limits"
     const csrfResponse = createResponse();
     await handler(
       createRequest("PATCH", "/api/cards/me", {
-        body: { catatan: "Tidak berubah" },
+        body: { facts: [{ label: "Catatan", value: "Tidak berubah" }] },
         headers: requestHeaders(db, { origin: "https://attacker.example" }),
       }),
       csrfResponse,
@@ -357,7 +362,7 @@ test("card edits enforce CSRF, ownership, strict fields, and update rate limits"
       const nextResponse = createResponse();
       await handler(
         createRequest("PATCH", "/api/cards/me", {
-          body: { hobi: `Hobi ${attempt}` },
+          body: { facts: [{ label: "Hobi", value: `Hobi ${attempt}` }] },
           headers: requestHeaders(db),
         }),
         nextResponse,
@@ -367,7 +372,7 @@ test("card edits enforce CSRF, ownership, strict fields, and update rate limits"
     const limitedResponse = createResponse();
     await handler(
       createRequest("PATCH", "/api/cards/me", {
-        body: { hobi: "Percobaan ke-31" },
+        body: { facts: [{ label: "Hobi", value: "Percobaan ke-31" }] },
         headers: requestHeaders(db),
       }),
       limitedResponse,

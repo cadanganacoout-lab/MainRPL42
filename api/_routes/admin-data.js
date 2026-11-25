@@ -29,6 +29,10 @@ const studentFields = {
   jabatan: z.string().trim().max(80),
   hobi: z.string().trim().max(300),
   catatan: z.string().trim().max(500),
+  facts: z.array(z.object({
+    label: z.string().trim().min(1).max(40),
+    value: z.string().trim().min(1).max(300),
+  }).strict()).max(5),
   foto: photoPathSchema,
   portfolio: EMPTY_OR_HTTPS.optional(),
   sortOrder: z.number().int().positive(),
@@ -37,8 +41,7 @@ const studentFields = {
 const createStudentSchema = z.object({
   nama: studentFields.nama,
   jabatan: studentFields.jabatan,
-  hobi: studentFields.hobi,
-  catatan: studentFields.catatan,
+  facts: studentFields.facts.optional(),
   foto: studentFields.foto,
   portfolio: studentFields.portfolio,
 }).strict();
@@ -134,6 +137,7 @@ async function listAdminStudents(db, response) {
         jabatan: 1,
         hobi: 1,
         catatan: 1,
+        facts: 1,
         foto: 1,
         avatar: 1,
         background: 1,
@@ -178,6 +182,8 @@ async function createStudent(db, response, request) {
     legacyId,
     slug: cardSlug(input.nama, legacyId),
     ...fields,
+    hobi: "",
+    catatan: "",
     ...(portfolio ? { portfolio } : {}),
     sortOrder: records.reduce((max, record) => Math.max(max, record.sortOrder), 0) + 1,
     ownerUserId: null,
@@ -220,7 +226,7 @@ async function updateStudent(db, response, request, legacyId) {
   }
   const student = await cards.findOne(
     { legacyId },
-    { projection: { _id: 0, legacyId: 1, slug: 1, nama: 1, jabatan: 1, hobi: 1, catatan: 1, foto: 1, avatar: 1, background: 1, portfolio: 1, sortOrder: 1, isPublished: 1 } },
+    { projection: { _id: 0, legacyId: 1, slug: 1, nama: 1, jabatan: 1, hobi: 1, catatan: 1, facts: 1, foto: 1, avatar: 1, background: 1, portfolio: 1, sortOrder: 1, isPublished: 1 } },
   );
   sendJson(response, 200, {
     student: { ...toPublicCard(student), isPublished: student.isPublished },

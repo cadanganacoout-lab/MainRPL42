@@ -45,7 +45,7 @@ function isMediaRoute(route) {
     route === "admin/gallery" ||
     /^admin\/gallery\/[^/]+$/.test(route) ||
     route === "admin/media/cleanup" ||
-    /^media\/(?:students|teachers)\/[^/]+\/(?:avatar|background)(?:\/(?:upload-url|finalize))?$/.test(route)
+    /^media\/(?:students|teachers|members)\/[^/]+\/(?:avatar|background)(?:\/(?:upload-url|finalize))?$/.test(route)
   );
 }
 
@@ -70,8 +70,36 @@ async function requireMainAdmin(db, request) {
   return session;
 }
 
-async function requireTarget(db, request, targetType, targetId) {
+async function requireTarget(db, request, targetType, targetId, mediaType) {
   const session = await requireAuth(db, request);
+  if (targetType === "member") {
+    if (
+      mediaType !== "avatar" ||
+      targetId !== "me" ||
+      session.user.role !== "member"
+    ) {
+      throw new ApiError(403, "FORBIDDEN", "You do not have permission to change this media.");
+    }
+    const checkedId = session.user._id.toString();
+    const filter = {
+      _id: session.user._id,
+      role: "member",
+      isActive: true,
+    };
+    const record = await db.collection("users").findOne(filter);
+    if (!record) {
+      throw new ApiError(404, "MEDIA_TARGET_NOT_FOUND", "The media target was not found.");
+    }
+    return {
+      session,
+      targetType,
+      targetId: checkedId,
+      collectionName: "users",
+      record,
+      filter,
+    };
+  }
+
   const collectionName = targetType === "student" ? "cards" : "teachers";
   const idField = targetType === "student" ? "legacyId" : "id";
   const checkedId = routePart(
@@ -748,9 +776,13 @@ async function handleMediaRoute({
   }
 
   const parts = route.split("/");
-  const targetType = parts[1] === "students" ? "student" : "teacher";
+  const targetType = parts[1] === "students"
+    ? "student"
+    : parts[1] === "members"
+      ? "member"
+      : "teacher";
   const mediaType = routePart(parts[3], z.enum(["avatar", "background"]));
-  const target = await requireTarget(db, request, targetType, parts[2]);
+  const target = await requireTarget(db, request, targetType, parts[2], mediaType);
   const config = readStorageConfig(getSupabaseConfig);
   if (parts.length === 5 && parts[4] === "upload-url") {
     if (request.method !== "POST") {

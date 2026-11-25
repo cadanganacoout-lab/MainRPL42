@@ -1,12 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  GURU,
-  GURU_JADWAL,
-  HARI_AKTIF,
   HARI_LIST,
-  JADWAL,
   MOTIVASI,
-  PIKET,
   SITE,
   UI,
 } from "../data/class-data.js";
@@ -282,65 +277,36 @@ function formatAgendaDate(date) {
   }).format(date);
 }
 
-function guruName(parity, day, subject, start, teachers) {
-  const schedule = GURU_JADWAL[parity]?.[day];
-  let originalName;
-  if (typeof schedule === "string") originalName = schedule;
-  if (schedule) {
-    if (typeof schedule !== "string") {
-      originalName = minutesOfDay(start) < minutesOfDay(schedule.mulai)
-        ? schedule.sebelum
-        : schedule.sesudah;
-    }
-  }
-  if (originalName) {
-    const originalTeacher = GURU.find(teacher => teacher.nama === originalName);
-    return teachers.find(teacher => teacher.id === originalTeacher?.id)?.nama || originalName;
-  }
-  const aliases = {
-    "Pendidikan Agama Budi Pekerti": "Pendidikan Agama",
-    "Pendidikan Jasmani Olahraga Kesehatan": "PJOK",
-    "Kreativitas Inovasi & Kewirausahaan": "Kewirausahaan",
-  };
-  const originalTeacher = GURU.find(
-    teacher => teacher.mapel === (aliases[subject] || subject),
-  );
-  return teachers.find(teacher => teacher.id === originalTeacher?.id)?.nama ||
-    originalTeacher?.nama ||
-    "—";
-}
-
-function ScheduleList({ date, now, isToday, teachers }) {
+function ScheduleList({ date, now, isToday, agenda, teachers }) {
   const day = HARI_LIST[date.getDay()];
   const parity = parityFor(date);
-  if (!HARI_AKTIF.includes(day)) {
+  const rows = agenda?.schedule?.[parity]?.[day]?.filter(Boolean) || [];
+  if (rows.length === 0) {
     return <p className="empty-note">Tidak ada jadwal pelajaran untuk hari {day}.</p>;
   }
-  const rows = JADWAL[parity][day] || [];
   const nowInMinutes = now.getHours() * 60 + now.getMinutes();
   const currentIndex = isToday
     ? rows.findIndex(row =>
-      typeof row !== "string" &&
+      row.mulai &&
+      row.selesai &&
       minutesOfDay(row.mulai) <= nowInMinutes &&
       nowInMinutes < minutesOfDay(row.selesai)
     )
     : -1;
   const nextIndex = isToday && currentIndex < 0
     ? rows.findIndex(row =>
-      typeof row !== "string" && minutesOfDay(row.mulai) > nowInMinutes
+      row.mulai && minutesOfDay(row.mulai) > nowInMinutes
     )
     : -1;
 
   return rows.map((row, index) => {
-    if (typeof row === "string") {
-      return <p className="empty-note" key={index}>{row}</p>;
-    }
     const isCurrent = index === currentIndex;
     const isNext = index === nextIndex;
-    const isPast = isToday && minutesOfDay(row.selesai) <= nowInMinutes;
-    const start = minutesOfDay(row.mulai);
-    const end = minutesOfDay(row.selesai);
-    const progress = isCurrent
+    const hasTime = Boolean(row.mulai && row.selesai);
+    const isPast = isToday && hasTime && minutesOfDay(row.selesai) <= nowInMinutes;
+    const start = hasTime ? minutesOfDay(row.mulai) : 0;
+    const end = hasTime ? minutesOfDay(row.selesai) : 0;
+    const progress = isCurrent && hasTime
       ? Math.min(100, Math.max(0, ((nowInMinutes - start) / (end - start)) * 100))
       : 0;
     const rowClassName = [
@@ -352,25 +318,27 @@ function ScheduleList({ date, now, isToday, teachers }) {
     ].filter(Boolean).join(" ");
 
     return (
-      <div className={rowClassName} key={`${row.jamKe}-${row.mulai}`} aria-current={isCurrent ? "time" : undefined}>
+      <div className={rowClassName} key={`${index}-${row.mulai || row.text || row.mapel}`} aria-current={isCurrent ? "time" : undefined}>
         <span className="agenda-row-marker" aria-hidden="true" />
-        <time className="agenda-row-time">
-          <span>{row.mulai}</span>
-          <span>{row.selesai}</span>
-        </time>
+        {hasTime && (
+          <time className="agenda-row-time">
+            <span>{row.mulai}</span>
+            <span>{row.selesai}</span>
+          </time>
+        )}
         <div className="agenda-row-content">
           <div className="agenda-row-title">
-            <strong>{row.istirahat ? row.label : row.mapel}</strong>
+            <strong>{row.istirahat ? row.label : row.mapel || row.text}</strong>
             {(isCurrent || isNext) && (
               <span className="agenda-row-badge">
                 {isCurrent ? row.istirahat ? "Istirahat" : "Berlangsung" : "Berikutnya"}
               </span>
             )}
           </div>
-          {!row.istirahat && (
-            <small>{guruName(parity, day, row.mapel, row.mulai, teachers)}</small>
+          {!row.istirahat && row.teacherId && (
+            <small>{teachers.find(teacher => teacher.id === row.teacherId)?.nama || "Guru belum tersedia"}</small>
           )}
-          {isCurrent && (
+          {isCurrent && hasTime && (
             <>
               <div
                 className="agenda-progress"
@@ -391,40 +359,54 @@ function ScheduleList({ date, now, isToday, teachers }) {
   });
 }
 
-function DutyList({ date }) {
+function DutyList({ date, agenda, students }) {
   const day = HARI_LIST[date.getDay()];
-  const names = HARI_AKTIF.includes(day) ? PIKET[day] : null;
-  if (!names) return <p className="agenda-empty">Tidak ada jadwal piket untuk hari {day}.</p>;
+  const duties = agenda?.duties?.[day]?.filter(Boolean) || [];
+  if (duties.length === 0) return <p className="agenda-empty">Tidak ada jadwal piket untuk hari {day}.</p>;
   return (
     <ul className="duty-list piket-list">
-      {names.map((name) => (
-        <li key={name}>
+      {duties.map((duty, index) => {
+        const name = students.find(student => student.id === duty.studentId)?.nama || duty.text;
+        if (!name) return null;
+        return (
+        <li key={`${duty.studentId || duty.text}-${index}`}>
           <span className="duty-avatar" aria-hidden="true">{initialsOf(name)}</span>
           <span>{name}</span>
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }
 
 function AgendaDashboard({ now }) {
   const [dayOffset, setDayOffset] = useState(0);
+  const [agenda, setAgenda] = useState(null);
   const [teachers, setTeachers] = useState([]);
-  const [teacherDataError, setTeacherDataError] = useState("");
+  const [students, setStudents] = useState([]);
+  const [agendaError, setAgendaError] = useState("");
   const date = new Date(now);
 
   useEffect(() => {
     let active = true;
-    apiRequest("/api/teachers")
-      .then(payload => {
-        if (!Array.isArray(payload.teachers)) {
-          throw new Error("Respons daftar guru tidak valid.");
-        }
-        if (active) setTeachers(payload.teachers);
-      })
-      .catch(() => {
-        if (active) setTeacherDataError("Nama guru mungkin belum menggunakan data terbaru.");
-      });
+    Promise.allSettled([
+      apiRequest("/api/agenda"),
+      apiRequest("/api/teachers"),
+      apiRequest("/api/cards"),
+    ]).then(([agendaResult, teachersResult, studentsResult]) => {
+      if (!active) return;
+      if (agendaResult.status === "fulfilled" && agendaResult.value.agenda) {
+        setAgenda(agendaResult.value.agenda);
+      } else {
+        setAgendaError("Jadwal kelas belum tersedia.");
+      }
+      if (teachersResult.status === "fulfilled" && Array.isArray(teachersResult.value.teachers)) {
+        setTeachers(teachersResult.value.teachers);
+      }
+      if (studentsResult.status === "fulfilled" && Array.isArray(studentsResult.value.cards)) {
+        setStudents(studentsResult.value.cards);
+      }
+    });
     return () => {
       active = false;
     };
@@ -438,19 +420,20 @@ function AgendaDashboard({ now }) {
     optionDate.setDate(optionDate.getDate() + offset);
     return { offset, date: optionDate };
   });
-  const rows = HARI_AKTIF.includes(day) ? JADWAL[parity][day] || [] : [];
+  const rows = agenda?.schedule?.[parity]?.[day]?.filter(Boolean) || [];
   const nowInMinutes = now.getHours() * 60 + now.getMinutes();
   const currentRow = isToday
     ? rows.find(row =>
-      typeof row !== "string" &&
+      row.mulai &&
+      row.selesai &&
       minutesOfDay(row.mulai) <= nowInMinutes &&
       nowInMinutes < minutesOfDay(row.selesai)
     )
     : null;
   const nextRow = isToday && !currentRow
-    ? rows.find(row => typeof row !== "string" && minutesOfDay(row.mulai) > nowInMinutes)
+    ? rows.find(row => row.mulai && minutesOfDay(row.mulai) > nowInMinutes)
     : null;
-  const scheduleStatus = !HARI_AKTIF.includes(day)
+  const scheduleStatus = rows.length === 0
     ? "Tidak ada jadwal pelajaran"
     : currentRow
       ? currentRow.istirahat ? "Waktu istirahat" : "Pelajaran sedang berlangsung"
@@ -497,13 +480,12 @@ function AgendaDashboard({ now }) {
             </div>
           )}
           <div className="agenda-timeline">
-            {teacherDataError && <p className="empty-note" role="status">{teacherDataError}</p>}
             <ScheduleList
               date={date}
               now={now}
               isToday={isToday}
+              agenda={agenda}
               teachers={teachers}
-              teacherDataError={teacherDataError}
             />
           </div>
         </section>
@@ -514,12 +496,11 @@ function AgendaDashboard({ now }) {
               <span className="agenda-eyebrow">{day}</span>
               <h3 id="duty-heading">Petugas piket</h3>
             </div>
-            {HARI_AKTIF.includes(day) && (
-              <span className="duty-count">{PIKET[day]?.length || 0} siswa</span>
-            )}
+            <span className="duty-count">{agenda?.duties?.[day]?.filter(Boolean).length || 0} petugas</span>
           </header>
           <p className="duty-intro">Tim yang bertugas menjaga kelas tetap nyaman.</p>
-          <DutyList date={date} />
+          {agendaError && <p className="empty-note" role="status">{agendaError}</p>}
+          <DutyList date={date} agenda={agenda} students={students} />
         </section>
       </div>
     </section>
@@ -549,6 +530,7 @@ export function HomePage() {
   const [motivationIndex, setMotivationIndex] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [gallery, setGallery] = useState({ photos: [], status: "loading" });
+  const [summary, setSummary] = useState(null);
   const dashboardRef = useRef(null);
 
   useEffect(() => {
@@ -570,6 +552,20 @@ export function HomePage() {
       .catch(error => {
         console.error("Could not load gallery photos for the home page.", error);
         if (active) setGallery({ photos: [], status: "error" });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/api/dashboard/summary")
+      .then(payload => {
+        if (active) setSummary(payload);
+      })
+      .catch(error => {
+        console.error("Could not load dashboard statistics.", error);
       });
     return () => {
       active = false;
@@ -638,15 +634,29 @@ export function HomePage() {
             <div className="stat-item stat-card">
               <span className="stat-icon"><Icon name="users" /></span>
               <div className="stat-body">
-                <span className="stat-value">{SITE.totalStudents}</span>
+                <span className="stat-value">{summary?.students ?? "—"}</span>
                 <span className="stat-label">{UI.home.summary.studentLabel}</span>
               </div>
             </div>
             <div className="stat-item stat-card">
               <span className="stat-icon"><Icon name="book" /></span>
               <div className="stat-body">
-                <span className="stat-value">{SITE.totalTeachers}</span>
+                <span className="stat-value">{summary?.teachers ?? "—"}</span>
                 <span className="stat-label">{UI.home.summary.teacherLabel}</span>
+              </div>
+              <div className="stat-item stat-card">
+                <span className="stat-icon"><Icon name="image" /></span>
+                <div className="stat-body">
+                  <span className="stat-value">{summary?.photos ?? "—"}</span>
+                  <span className="stat-label">Foto galeri</span>
+                </div>
+              </div>
+              <div className="stat-item stat-card">
+                <span className="stat-icon"><Icon name="play" /></span>
+                <div className="stat-body">
+                  <span className="stat-value">{summary?.videos ?? "—"}</span>
+                  <span className="stat-label">Video</span>
+                </div>
               </div>
             </div>
             <div className="stat-item stat-card">

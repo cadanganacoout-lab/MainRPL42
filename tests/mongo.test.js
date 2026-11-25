@@ -30,25 +30,33 @@ const {
 } = require("../api/_routes/auth");
 const {
   buildLegacyCards,
-  loadLegacyStudents,
   makeUpsertOperations,
 } = require("../scripts/migrate-legacy");
 
-test("legacy migration maps all students without adding deferred fields", () => {
-  const cards = buildLegacyCards(loadLegacyStudents(), new Date("2026-01-01T00:00:00Z"));
+const studentFixtures = [{
+  id: "s01",
+  nama: "Siswa Satu",
+  jabatan: "Siswa",
+  hobi: "Membaca",
+  catatan: "-",
+  foto: "asset/profil/siswa-satu.webp",
+}];
 
-  assert.equal(cards.length, 33);
+test("student migration maps fixture records without adding deferred fields", () => {
+  const cards = buildLegacyCards(studentFixtures, new Date("2026-01-01T00:00:00Z"));
+
+  assert.equal(cards.length, 1);
   assert.equal(cards[0].legacyId, "s01");
   assert.equal(cards[0].sortOrder, 1);
-  assert.equal(new Set(cards.map(card => card.legacyId)).size, 33);
-  assert.equal(new Set(cards.map(card => card.slug)).size, 33);
+  assert.equal(new Set(cards.map(card => card.legacyId)).size, 1);
+  assert.equal(new Set(cards.map(card => card.slug)).size, 1);
   assert.ok(cards.every(card => card.ownerUserId === null && card.isPublished));
   assert.ok(cards.every(card => !("motto" in card) && !("background" in card)));
   assert.ok(cards.every(card => card.portfolio === undefined || card.portfolio.startsWith("https://")));
 });
 
-test("legacy migration upserts only missing cards and preserves existing edits", () => {
-  const card = buildLegacyCards(loadLegacyStudents())[0];
+test("student migration upserts only missing cards and preserves existing edits", () => {
+  const card = buildLegacyCards(studentFixtures)[0];
   const [operation] = makeUpsertOperations([card]);
   assert.deepEqual(operation.updateOne.filter, { legacyId: "s01" });
   assert.deepEqual(operation.updateOne.update, { $setOnInsert: card });
@@ -87,9 +95,8 @@ test("public serializers omit internal identifiers and credentials", () => {
     isPublished: true,
   });
   assert.deepEqual(Object.keys(card).sort(), [
-    "catatan",
+    "facts",
     "foto",
-    "hobi",
     "id",
     "jabatan",
     "nama",
@@ -165,8 +172,7 @@ test("public card repository uses validated filters and field projections", asyn
     slug: "student-one",
     nama: "Student One",
     jabatan: "Siswa",
-    hobi: "-",
-    catatan: "-",
+    facts: [],
     foto: "asset/profil/student.png",
     sortOrder: 1,
   });

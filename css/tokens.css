@@ -74,7 +74,7 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-canvas: #faf8f3;
+  --color-canvas: #f0e5ca;
   --gradient-canvas: linear-gradient(135deg, #faf8f3 0%, #fffdfa 55%, #f2eee5 100%);
   --color-surface: #ffffff;
   --gradient-surface: linear-gradient(

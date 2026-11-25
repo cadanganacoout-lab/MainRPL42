@@ -1,4 +1,4 @@
-const { randomBytes } = require("node:crypto");
+const { randomBytes, randomInt } = require("node:crypto");
 const bcrypt = require("bcryptjs");
 const { ApiError } = require("./http");
 
@@ -55,7 +55,16 @@ const COMMON_PASSWORDS = new Set([
     COMMON_PASSWORD_SUFFIXES.map(suffix => `${base}${suffix}`),
   ),
 ]);
+const TEMP_PASSWORD_ALPHABET =
+  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%_-+";
 const dummyHashPromise = bcrypt.hash(randomBytes(32).toString("hex"), BCRYPT_COST);
+
+function generateTemporaryPassword() {
+  return Array.from(
+    { length: 16 },
+    () => TEMP_PASSWORD_ALPHABET[randomInt(TEMP_PASSWORD_ALPHABET.length)],
+  ).join("");
+}
 
 function assertBcryptLength(password) {
   if (typeof password !== "string") {
@@ -110,6 +119,7 @@ module.exports = {
   BCRYPT_COST,
   assertBcryptLength,
   getDummyPasswordHash,
+  generateTemporaryPassword,
   hashPassword,
   validateNewPassword,
   verifyPassword,

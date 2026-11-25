@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { SITE, VIDEO } from "../data/class-data.js";
+import { SITE } from "../data/class-data.js";
 import { apiRequest } from "../lib/api.js";
 
 function VideoPlayer({ video, autoplay = false }) {
@@ -47,23 +47,33 @@ export function VideosPage() {
   const classLabel = SITE.className.split(" ")[0];
   const query = window.location.hash.split("?")[1] || "";
   const selectedVideoId = new URLSearchParams(query).get("id");
-  const [videos, setVideos] = useState(VIDEO);
+  const [videos, setVideos] = useState([]);
+  const [status, setStatus] = useState("loading");
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setStatus("loading");
+    setError("");
     apiRequest("/api/videos")
       .then(payload => {
-        if (active && Array.isArray(payload.videos)) {
-          setVideos(payload.videos.length ? payload.videos : VIDEO);
+        if (!Array.isArray(payload.videos)) throw new Error("Respons video tidak valid.");
+        if (active) {
+          setVideos(payload.videos);
+          setStatus("ready");
         }
       })
-      .catch(() => {
-        if (active) setVideos(VIDEO);
+      .catch(requestError => {
+        if (active) {
+          setError(requestError.message);
+          setStatus("error");
+        }
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [retry]);
 
   const selectedVideo = videos.find(video => video.id === selectedVideoId);
 
@@ -90,7 +100,16 @@ export function VideosPage() {
           atau buka langsung di YouTube.
         </p>
       </section>
-      <section className="container">
+      <section className="container" aria-busy={status === "loading"}>
+        {status === "loading" && <p className="admin-data-status" role="status">Memuat video…</p>}
+        {status === "error" && (
+          <div className="student-list-message" role="alert">
+            <p>{error}</p>
+            <button type="button" className="button-secondary" onClick={() => setRetry(value => value + 1)}>
+              Coba muat ulang
+            </button>
+          </div>
+        )}
         <p className="video-count">{videos.length} video untuk ditonton</p>
         <div className="video-grid">
           {videos.map((video) => (
@@ -121,6 +140,9 @@ export function VideosPage() {
             </article>
           ))}
         </div>
+        {status === "ready" && videos.length === 0 && (
+          <p className="empty-note" role="status">Belum ada video kegiatan.</p>
+        )}
       </section>
     </>
   );

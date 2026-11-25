@@ -14,8 +14,10 @@ const { httpsUrlSchema, slugSchema, toPublicCard } = require("../_lib/schemas");
 const PUBLIC_CACHE_CONTROL = "public, max-age=30, stale-while-revalidate=60";
 const cardUpdateBodySchema = z
   .object({
-    hobi: z.string().trim().max(300).optional(),
-    catatan: z.string().trim().max(500).optional(),
+    facts: z.array(z.object({
+      label: z.string().trim().min(1).max(40),
+      value: z.string().trim().min(1).max(300),
+    }).strict()).max(5).optional(),
     portfolio: z
       .string()
       .trim()

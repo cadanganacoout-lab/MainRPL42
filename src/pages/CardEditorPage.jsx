@@ -3,30 +3,29 @@ import { StudentCard } from "../components/StudentCard.jsx";
 import { MediaUploader } from "../components/MediaUploader.jsx";
 import { apiRequest } from "../lib/api.js";
 
-const fieldLimits = {
-  hobi: 300,
-  catatan: 500,
-  portfolio: 2048,
-};
+const FACT_LIMIT = 5;
+const FACT_LABEL_LIMIT = 40;
+const FACT_VALUE_LIMIT = 300;
+const PORTFOLIO_LIMIT = 2048;
 
 function editableValues(card) {
   return {
-    hobi: card.hobi || "",
-    catatan: card.catatan || "",
+    facts: Array.from({ length: FACT_LIMIT }, (_, index) => ({
+      label: card.facts?.[index]?.label || "",
+      value: card.facts?.[index]?.value || "",
+    })),
     portfolio: card.portfolio || "",
   };
 }
 
 function hasChanges(original, draft) {
-  return Boolean(
-    original &&
-    draft &&
-    Object.keys(fieldLimits).some(field => {
-      const currentValue = draft[field].trim();
-      const originalValue = (original[field] || "").trim();
-      return currentValue !== originalValue;
-    }),
-  );
+  if (!original || !draft) return false;
+  const originalDraft = editableValues(original);
+  return draft.portfolio.trim() !== originalDraft.portfolio.trim() ||
+    draft.facts.some((fact, index) =>
+      fact.label.trim() !== originalDraft.facts[index].label.trim() ||
+      fact.value.trim() !== originalDraft.facts[index].value.trim(),
+    );
 }
 
 function CardEditorLoading() {
@@ -137,11 +136,22 @@ export function CardEditorPage() {
     setNotice("");
     setSaving(true);
     try {
+      const partialFact = draft.facts.some(fact =>
+        Boolean(fact.label.trim()) !== Boolean(fact.value.trim()),
+      );
+      if (partialFact) {
+        setError("Isi label dan fakta pada setiap slot yang digunakan.");
+        return;
+      }
       const payload = await apiRequest("/api/cards/me", {
         method: "PATCH",
         body: {
-          hobi: draft.hobi,
-          catatan: draft.catatan,
+          facts: draft.facts
+            .filter(fact => fact.label.trim() && fact.value.trim())
+            .map(fact => ({
+              label: fact.label.trim(),
+              value: fact.value.trim(),
+            })),
           portfolio: draft.portfolio.trim(),
         },
       });
@@ -155,8 +165,18 @@ export function CardEditorPage() {
     }
   }
 
-  function updateField(field, value) {
-    setDraft(current => ({ ...current, [field]: value }));
+  function updateFact(index, field, value) {
+    setDraft(current => ({
+      ...current,
+      facts: current.facts.map((fact, factIndex) =>
+        factIndex === index ? { ...fact, [field]: value } : fact,
+      ),
+    }));
+    setNotice("");
+  }
+
+  function updatePortfolio(value) {
+    setDraft(current => ({ ...current, portfolio: value }));
     setNotice("");
   }
 
@@ -185,33 +205,31 @@ export function CardEditorPage() {
                 <p>{card.jabatan} · Informasi identitas hanya dapat diubah admin.</p>
               </div>
 
-              <div className="auth-field">
-                <label htmlFor="card-hobi">Hobi</label>
-                <textarea
-                  id="card-hobi"
-                  name="hobi"
-                  rows={3}
-                  maxLength={fieldLimits.hobi}
-                  value={draft.hobi}
-                  aria-describedby="card-hobi-count"
-                  onChange={event => updateField("hobi", event.target.value)}
-                />
-                <small id="card-hobi-count">{draft.hobi.length}/{fieldLimits.hobi} karakter</small>
-              </div>
-
-              <div className="auth-field">
-                <label htmlFor="card-catatan">Catatan</label>
-                <textarea
-                  id="card-catatan"
-                  name="catatan"
-                  rows={4}
-                  maxLength={fieldLimits.catatan}
-                  value={draft.catatan}
-                  aria-describedby="card-catatan-count"
-                  onChange={event => updateField("catatan", event.target.value)}
-                />
-                <small id="card-catatan-count">{draft.catatan.length}/{fieldLimits.catatan} karakter</small>
-              </div>
+              <fieldset className="card-facts-fields" aria-describedby="card-facts-help">
+                <legend>Fakta tentang saya (maksimal 5)</legend>
+                <p id="card-facts-help">Isi label dan fakta pada slot yang ingin ditampilkan di card.</p>
+                {draft.facts.map((fact, index) => (
+                  <div className="card-fact-editor" key={index}>
+                    <span className="card-fact-number">Fakta {index + 1}</span>
+                    <label htmlFor={`card-fact-label-${index}`}>Label</label>
+                    <input
+                      id={`card-fact-label-${index}`}
+                      name={`facts[${index}][label]`}
+                      value={fact.label}
+                      maxLength={FACT_LABEL_LIMIT}
+                      onChange={event => updateFact(index, "label", event.target.value)}
+                    />
+                    <label htmlFor={`card-fact-value-${index}`}>Isi fakta</label>
+                    <input
+                      id={`card-fact-value-${index}`}
+                      name={`facts[${index}][value]`}
+                      value={fact.value}
+                      maxLength={FACT_VALUE_LIMIT}
+                      onChange={event => updateFact(index, "value", event.target.value)}
+                    />
+                  </div>
+                ))}
+              </fieldset>
 
               <div className="auth-field">
                 <label htmlFor="card-portfolio">Portfolio (opsional)</label>
@@ -222,13 +240,13 @@ export function CardEditorPage() {
                   inputMode="url"
                   autoComplete="url"
                   pattern="https://.+"
-                  maxLength={fieldLimits.portfolio}
+                  maxLength={PORTFOLIO_LIMIT}
                   value={draft.portfolio}
                   aria-describedby="card-portfolio-help card-portfolio-count"
-                  onChange={event => updateField("portfolio", event.target.value)}
+                  onChange={event => updatePortfolio(event.target.value)}
                 />
                 <small id="card-portfolio-help">Gunakan URL HTTPS. Kosongkan untuk menghapus tautan.</small>
-                <small id="card-portfolio-count">{draft.portfolio.length}/{fieldLimits.portfolio} karakter</small>
+                <small id="card-portfolio-count">{draft.portfolio.length}/{PORTFOLIO_LIMIT} karakter</small>
               </div>
 
               <MediaUploader

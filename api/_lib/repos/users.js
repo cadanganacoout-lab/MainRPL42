@@ -15,6 +15,8 @@ const PROFILE_USER_PROJECTION = {
   cardId: 1,
   mustChangePassword: 1,
   isActive: 1,
+  profileVisible: 1,
+  avatar: 1,
 };
 const AUTH_USER_PROJECTION = {
   _id: 1,
@@ -23,6 +25,8 @@ const AUTH_USER_PROJECTION = {
   passwordHash: 1,
   role: 1,
   cardId: 1,
+  profileVisible: 1,
+  avatar: 1,
   createdAt: 1,
   mustChangePassword: 1,
   isActive: 1,
@@ -62,16 +66,16 @@ async function findUserById(db, userId) {
   );
 }
 
-async function updateDisplayNameForUser(db, userId, displayName, now = new Date()) {
+async function updateProfileForUser(db, userId, changes, now = new Date()) {
   const id = parseObjectId(userId);
   const users = db.collection("users");
   const result = await users.updateOne(
     {
       _id: id,
       isActive: true,
-      role: { $in: ["student", "admin"] },
+      role: { $in: ["member", "student", "admin"] },
     },
-    { $set: { displayName, updatedAt: now } },
+    { $set: { ...changes, updatedAt: now } },
   );
   if (result.matchedCount !== 1) return null;
   return users.findOne(
@@ -85,5 +89,5 @@ module.exports = {
   findProfileUserByUsername,
   findPublicUserByUsername,
   findUserById,
-  updateDisplayNameForUser,
+  updateProfileForUser,
 };

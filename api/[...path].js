@@ -12,6 +12,12 @@ const {
   isAdminCommentRoute,
 } = require("./_routes/admin-comments");
 const { handleVideosRoute, isVideoRoute } = require("./_routes/videos");
+const { handleAgendaRoute, isAgendaRoute } = require("./_routes/agenda");
+const { handleDashboardRoute, isDashboardRoute } = require("./_routes/dashboard");
+const {
+  handleAdminAccountRoute,
+  isAdminAccountRoute,
+} = require("./_routes/admin-accounts");
 
 function createHandler({
   getDatabase = getDb,
@@ -40,6 +46,26 @@ function createHandler({
         if (request.method === "POST") requireSameOrigin(request);
         const db = await getDatabase();
         await handleAuthRoute({ request, response, route, db });
+        return;
+      }
+
+      if (isAgendaRoute(route)) {
+        if (request.method !== "GET") requireSameOrigin(request);
+        const db = await getDatabase();
+        await handleAgendaRoute({ request, response, route, db });
+        return;
+      }
+
+      if (isDashboardRoute(route)) {
+        const db = await getDatabase();
+        await handleDashboardRoute({ request, response, route, db });
+        return;
+      }
+
+      if (isAdminAccountRoute(route)) {
+        if (request.method !== "GET") requireSameOrigin(request);
+        const db = await getDatabase();
+        await handleAdminAccountRoute({ request, response, route, db });
         return;
       }
 

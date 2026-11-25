@@ -8,6 +8,7 @@ dist/
 .vercel/
 docs/
 supabase/
+mongodb/
 
 # Local environment variables and secrets
 .env

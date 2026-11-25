@@ -251,7 +251,7 @@ export function SiteHeader({ activePage, introMode = false }) {
                 group: "pages",
                 label: navMenus.exploreLabel,
                 links: navMenus.exploreLinks,
-                isActive: ["siswa", "guru"].includes(activePage),
+                isActive: ["siswa", "guru", "galeri", "video"].includes(activePage),
               },
             ].map(({ group, label, links, isActive }) => (
               <details className="nav-picker" data-group={group} key={group}>
@@ -322,6 +322,7 @@ export function SiteHeader({ activePage, introMode = false }) {
                 <div className="account-menu-panel">
                   {!user.mustChangePassword && (
                     <>
+                      <a href="#/dashboard" onClick={closeAccountMenu}>Dashboard</a>
                       <a href="#/profil" onClick={closeAccountMenu}>Profil Saya</a>
                       {["student", "admin"].includes(user.role) && (
                         <a href="#/card-saya" onClick={closeAccountMenu}>Edit Card</a>

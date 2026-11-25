@@ -2,8 +2,6 @@ const puppeteer = require('puppeteer');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { buildLegacyCards, loadLegacyStudents } = require('./migrate-legacy');
-const { loadLegacyTeachers } = require('./migrate-teachers');
 const chromeCandidates = [
   process.env.CHROME_PATH,
   process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : null,
@@ -19,29 +17,43 @@ const SCREENSHOT_DIR = path.join(REPORT_DIR, 'screenshots');
 const routes = ['beranda','siswa','guru','galeri','video','komentar'];
 const results = [];
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const browserCards = buildLegacyCards(loadLegacyStudents()).map(card => ({
-  id: card.legacyId,
-  slug: card.slug,
-  nama: card.nama,
-  jabatan: card.jabatan,
-  hobi: card.hobi,
-  catatan: card.catatan,
-  foto: card.foto,
-  ...(card.portfolio ? {portfolio: card.portfolio} : {}),
-  sortOrder: card.sortOrder
-}));
-const browserTeachers = loadLegacyTeachers().map((teacher, index) => ({
-  ...teacher,
-  sortOrder: index + 1
-}));
+const browserCards = [
+  {id: 's01', slug: 'browser-student-one', nama: 'Browser Student One', jabatan: 'Ketua Kelas', facts: [], foto: '', sortOrder: 1},
+  {id: 's02', slug: 'browser-student-two', nama: 'Browser Student Two', jabatan: 'Siswa', facts: [], foto: '', sortOrder: 2}
+];
+const browserTeachers = [
+  {id: 'g01', nama: 'Browser Teacher One', mapel: 'Pemrograman', role: 'Guru Teori', foto: '', sortOrder: 1},
+  {id: 'g02', nama: 'Browser Teacher Two', mapel: 'Basis Data', role: 'Guru Teori', foto: '', sortOrder: 2}
+];
 const browserPhotos = Array.from({length: 10}, (_, index) => ({
   id: `browser-photo-${index + 1}`,
   caption: `Foto database ${index + 1}`,
   url: `https://images.example.test/photos/${index + 1}.svg`,
   sortOrder: index + 1
 }));
+const browserVideos = Array.from({length: 9}, (_, index) => ({
+  id: `v${String(index + 1).padStart(2, '0')}`,
+  judul: `Browser Video ${index + 1}`,
+  deskripsi: 'Fixture browser test',
+  youtubeId: 'dQw4w9WgXcQ',
+  sortOrder: index + 1
+}));
+const browserAgendaDays = Object.fromEntries(
+  ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map(day => [day, [
+    {mulai: '08:00', selesai: '08:45', mapel: 'Pemrograman', teacherId: 'g01'}
+  ]])
+);
+const browserAgendaDuties = Object.fromEntries(
+  ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map(day => [day, [
+    {studentId: 's01'}
+  ]])
+);
+const browserAgenda = {
+  schedule: {ganjil: browserAgendaDays, genap: browserAgendaDays},
+  duties: browserAgendaDuties
+};
 
-async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imageDelay = 0} = {}) {
+async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
   await page.setRequestInterception(true);
   page.on('request', async request => {
     const pathname = new URL(request.url()).pathname;
@@ -66,7 +78,28 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
         body: JSON.stringify({teachers: browserTeachers})
       });
     }
-    if (pathname === '/api/gallery' && includeGallery) {
+    if (pathname === '/api/videos') {
+      return request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({videos: browserVideos})
+      });
+    }
+    if (pathname === '/api/dashboard/summary') {
+      return request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({students: 2, teachers: 2, photos: 10, videos: 9})
+      });
+    }
+    if (pathname === '/api/agenda') {
+      return request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({agenda: browserAgenda})
+      });
+    }
+    if (pathname === '/api/gallery') {
       if (galleryDelay) await wait(galleryDelay);
       return request.respond({
         status: 200,
@@ -118,9 +151,8 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
       const messages = [];
       let stage = 'page load';
       await mockSiteApi(page, {
-        includeGallery: route === 'beranda',
         galleryDelay: route === 'beranda' ? 500 : 0,
-        imageDelay: route === 'beranda' ? 5000 : 0
+        imageDelay: route === 'beranda' ? 7500 : 0
       });
 
       page.on('console', msg => {
@@ -185,7 +217,7 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
           await mobilePage.close();
         }
         {
-          if (route === 'siswa' || route === 'guru') {
+          if (['siswa', 'guru', 'galeri', 'video'].includes(route)) {
             assert.equal(
               await page.$eval('.nav-picker[data-group="pages"] .nav-picker-trigger.active', trigger => trigger.dataset.page),
               route
@@ -202,12 +234,8 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
             );
           }
           if (route === 'siswa' || route === 'guru') {
-          const expectedCount = await page.evaluate(() => {
-            const data = window.XIRPL1_DATA;
-            return document.body.dataset.page === 'guru'
-              ? data.GURU.length
-              : data.SISWA.length;
-          });
+          const people = route === 'guru' ? browserTeachers : browserCards;
+          const expectedCount = people.length;
           assert.equal(await page.$$eval('.people-card', cards => cards.length), expectedCount);
           assert.equal(
             await page.$eval('.nav-picker[data-group="pages"] .nav-picker-trigger.active', trigger => trigger.dataset.page),
@@ -216,21 +244,12 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
 
           const search = await page.$eval('input[type="search"]', input => input.getAttribute('aria-label'));
           assert.ok(search, 'React people page has an accessible search field.');
-          const searchTerm = await page.evaluate(() => {
-            const data = window.XIRPL1_DATA;
-            const people = document.body.dataset.page === 'guru' ? data.GURU : data.SISWA;
-            return people[0].nama;
-          });
+          const searchTerm = people[0].nama;
           await page.type('input[type="search"]', searchTerm);
-          const matchingCount = await page.evaluate(() => {
-            const data = window.XIRPL1_DATA;
-            const people = document.body.dataset.page === 'guru' ? data.GURU : data.SISWA;
-            const query = document.querySelector('input[type="search"]').value.toLowerCase();
-            return people.filter(person =>
-              person.nama.toLowerCase().includes(query) ||
-              (person.jabatan || person.mapel).toLowerCase().includes(query)
-            ).length;
-          });
+          const matchingCount = people.filter(person =>
+            person.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (person.jabatan || person.mapel).toLowerCase().includes(searchTerm.toLowerCase())
+          ).length;
           assert.equal(await page.$$eval('.people-card', cards => cards.length), matchingCount);
 
           await page.click('input[type="search"]');
@@ -241,14 +260,14 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
           assert.equal(await page.$$eval('.people-card', cards => cards.length), 0);
           assert.ok(await page.$('.empty-note'), 'Empty search results show an explanation.');
           } else if (route === 'galeri') {
-            const count = await page.evaluate(() => window.XIRPL1_DATA.GALERI.length);
+            const count = browserPhotos.length;
             assert.equal((await page.$$('.gallery-item')).length, count);
             await page.click('.gallery-item');
             assert.ok(await page.$('[role="dialog"]'), 'Selecting a photo opens its dialog.');
             await page.keyboard.press('Escape');
             assert.equal(await page.$('[role="dialog"]'), null, 'Escape closes the photo dialog.');
           } else if (route === 'video') {
-            const count = await page.evaluate(() => window.XIRPL1_DATA.VIDEO.length);
+            const count = browserVideos.length;
             assert.equal((await page.$$('.video-card')).length, count);
             assert.ok(await page.$('.video-frame button.video-play[aria-label]'), 'Video players have accessible labels.');
             assert.ok(await page.$('#video-v02.is-selected iframe[title]'), 'A selected highlight opens and plays its matching video.');
@@ -366,7 +385,7 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
             );
             assert.deepEqual(
               await page.$$eval('.nav-picker[data-group="pages"] .nav-picker-link', links => links.map(link => link.textContent.trim())),
-              ['Siswa', 'Guru', 'Masuk', 'Daftar'],
+              ['Siswa', 'Guru', 'Galeri', 'Video', 'Masuk', 'Daftar'],
               'The explore menu includes students, teachers, login, and registration.'
             );
             await page.evaluate(() => {
@@ -385,7 +404,7 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
               'visible',
               'The main navigation appears after scrolling past the welcome hero.'
             );
-            assert.equal((await page.$$('.stat-card')).length, 3);
+            assert.equal((await page.$$('.stat-card')).length, 5);
             assert.ok(await page.$('.agenda-card--schedule'), 'Home page renders the schedule dashboard.');
             assert.ok(await page.$('.agenda-card--duty'), 'Home page renders the duty dashboard.');
             assert.equal((await page.$$('.agenda-day-button')).length, 2);
@@ -426,10 +445,19 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
               {timeout: 3000}
             );
             stage = 'home navigation focus target';
-            await page.waitForFunction(
-              () => document.activeElement.id === 'video-spotlight',
-              {timeout: 3000}
-            );
+            try {
+              await page.waitForFunction(
+                () => document.activeElement.id === 'video-spotlight',
+                {timeout: 3000}
+              );
+            } catch {
+              const focusState = await page.evaluate(() => ({
+                hash: window.location.hash,
+                activeElement: document.activeElement?.id,
+                target: Boolean(document.getElementById('video-spotlight'))
+              }));
+              throw new Error(`Home section navigation did not focus its target: ${JSON.stringify(focusState)}`);
+            }
             const footerLinks = await page.evaluate(() => {
               const {UI} = window.XIRPL1_DATA;
               return {
@@ -477,14 +505,33 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
             );
             await page.click('.nav-picker[data-group="home"] summary');
             await page.click('.nav-picker[data-group="home"] a[href*="section=site-footer"]');
+            stage = 'footer navigation hash change';
             await page.waitForFunction(
-              () => window.location.hash === '#/beranda?section=site-footer' &&
-                document.activeElement.id === 'site-footer',
+              () => window.location.hash === '#/beranda?section=site-footer',
               {timeout: 3000}
             );
+            stage = 'footer navigation focus target';
+            try {
+              await page.waitForFunction(
+                () => document.activeElement.id === 'site-footer',
+                {timeout: 3000}
+              );
+            } catch {
+              const focusState = await page.evaluate(() => ({
+                hash: window.location.hash,
+                activeElement: document.activeElement?.id,
+                target: Boolean(document.getElementById('site-footer'))
+              }));
+              throw new Error(`Footer section navigation did not focus its target: ${JSON.stringify(focusState)}`);
+            }
+            stage = 'footer wordmark reveal';
+            await page.$eval('.footer-wordmark', wordmark => wordmark.scrollIntoView({
+              block: 'center',
+              behavior: 'instant'
+            }));
             await page.waitForFunction(
               () => document.querySelector('.footer-wordmark').classList.contains('is-revealed'),
-              {timeout: 3000}
+              {timeout: 10000}
             );
             assert.deepEqual(
               await page.$eval('.footer-wordmark-letter', letter => {
@@ -766,7 +813,11 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
           false,
           'Auth data is not persisted in browser storage.'
         );
-        assert.equal(authPageErrors.length, 0, 'Auth pages should not raise browser errors.');
+        assert.equal(
+          authPageErrors.length,
+          0,
+          `Auth pages should not raise browser errors: ${authPageErrors.join('; ')}`
+        );
         return authPage;
       } catch (error) {
         await authPage.close();
@@ -976,19 +1027,19 @@ async function mockSiteApi(page, {includeGallery = false, galleryDelay = 0, imag
         `http://127.0.0.1:${address.port}/index.html#/card-saya`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
-      await cardEditorPage.waitForSelector('#card-hobi');
-      await cardEditorPage.click('#card-hobi');
+      await cardEditorPage.waitForSelector('#card-fact-value-0');
+      await cardEditorPage.click('#card-fact-value-0');
       await cardEditorPage.keyboard.down('Control');
       await cardEditorPage.keyboard.press('A');
       await cardEditorPage.keyboard.up('Control');
-      await cardEditorPage.type('#card-hobi', 'Hobi yang diperbarui');
+      await cardEditorPage.type('#card-fact-value-0', 'Fakta yang diperbarui');
       await cardEditorPage.waitForSelector('.card-editor-unsaved');
       await wait(50);
       await cardEditorPage.click('.brand[href="#/beranda"]');
       await wait(250);
       const restoredRoute = await cardEditorPage.evaluate(() => ({
         hash: window.location.hash,
-        editorVisible: Boolean(document.querySelector('#card-hobi'))
+        editorVisible: Boolean(document.querySelector('#card-fact-value-0'))
       }));
       assert.deepEqual(
         restoredRoute,

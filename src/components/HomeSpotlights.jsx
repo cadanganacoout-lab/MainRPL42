@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { VIDEO, UI } from "../data/class-data.js";
+import { UI } from "../data/class-data.js";
 import { apiRequest } from "../lib/api.js";
 
 const VIDEO_HIGHLIGHT_COUNT = 9;
@@ -119,23 +119,29 @@ function GalleryHighlights({ photos, status }) {
 }
 
 function VideoHighlights() {
-  const [videos, setVideos] = useState(VIDEO);
+  const [videos, setVideos] = useState([]);
+  const [status, setStatus] = useState("loading");
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setStatus("loading");
     apiRequest("/api/videos")
       .then(payload => {
-        if (active && Array.isArray(payload.videos)) {
-          setVideos(payload.videos.length ? payload.videos : VIDEO);
+        if (!Array.isArray(payload.videos)) throw new Error("Respons video tidak valid.");
+        if (active) {
+          setVideos(payload.videos);
+          setStatus("ready");
         }
       })
-      .catch(() => {
-        if (active) setVideos(VIDEO);
+      .catch(error => {
+        console.error("Could not load videos for the home page.", error);
+        if (active) setStatus("error");
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [retry]);
 
   const videoHighlights = selectVideoHighlights(videos);
 
@@ -149,6 +155,15 @@ function VideoHighlights() {
           <a className="spotlight-link" href={UI.spotlights.videoLink}>{UI.spotlights.videoLinkLabel}</a>
         </div>
         <div className="video-highlight-grid">
+          {status === "loading" && <p role="status">Memuat video…</p>}
+          {status === "error" && (
+            <div className="gallery-highlight-empty" role="alert">
+              <p>Video belum dapat dimuat.</p>
+              <button type="button" className="button-secondary" onClick={() => setRetry(value => value + 1)}>
+                Coba muat ulang
+              </button>
+            </div>
+          )}
           {videoHighlights.map((video, index) => (
             <a
               className="video-highlight-card"
@@ -174,6 +189,9 @@ function VideoHighlights() {
               </span>
             </a>
           ))}
+          {status === "ready" && videos.length === 0 && (
+            <p className="gallery-highlight-empty" role="status">Belum ada video kegiatan.</p>
+          )}
         </div>
       </div>
     </section>

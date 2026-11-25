@@ -8,7 +8,6 @@ const {
   buildLegacyTeachers,
   makeRoleBackfillOperations,
   makeUpsertOperations,
-  loadLegacyTeachers,
 } = require("../scripts/migrate-teachers");
 const {
   createStudentSchema,
@@ -47,6 +46,31 @@ function createRequest(method, url, headers = {}, body) {
   if (body !== undefined) request.headers["content-type"] = "application/json";
   return request;
 }
+
+const teacherFixtures = [
+  {
+    id: "g01",
+    nama: "Guru Satu",
+    mapel: "Matematika",
+    role: "Guru Teori",
+    foto: "asset/profil/guru-satu.webp",
+  },
+  {
+    id: "g02",
+    nama: "Guru Dua",
+    mapel: "Pemrograman",
+    role: "Guru Praktek",
+    foto: "asset/profil/guru-dua.webp",
+  },
+  {
+    id: "g03",
+    nama: "Guru Tiga",
+    mapel: "Basis Data",
+    role: "Guru Praktek",
+    foto: "asset/profil/guru-tiga.webp",
+    linktree: "https://linktr.ee/guru-tiga",
+  },
+];
 
 function createDatabase(role, { mutable = false } = {}) {
   const token = "A".repeat(43);
@@ -200,18 +224,15 @@ function createDatabase(role, { mutable = false } = {}) {
   };
 }
 
-test("teacher migration maps all source records without overwriting existing data", () => {
-  const source = loadLegacyTeachers();
-  const records = buildLegacyTeachers(source, new Date("2025-01-01T00:00:00Z"));
+test("teacher migration maps fixture records without overwriting existing data", () => {
+  const records = buildLegacyTeachers(teacherFixtures, new Date("2025-01-01T00:00:00Z"));
   const operations = makeUpsertOperations(records);
 
-  assert.equal(records.length, 15);
+  assert.equal(records.length, 3);
   assert.equal(records[0].id, "g01");
-  assert.equal(records[2].role, "Guru Praktek");
-  assert.equal(records[7].role, "Guru Teori");
-  assert.equal(records[10].role, "Guru Praktek");
-  assert.equal(records[14].sortOrder, 15);
-  assert.equal(records[10].linktree, "https://linktr.ee/andiespramudiyantoro");
+  assert.equal(records[1].role, "Guru Praktek");
+  assert.equal(records[2].sortOrder, 3);
+  assert.equal(records[2].linktree, "https://linktr.ee/guru-tiga");
   assert.deepEqual(operations[0].updateOne.update, {
     $setOnInsert: records[0],
   });
@@ -436,8 +457,7 @@ test("admin can create, edit, archive, and restore student cards", async () => {
       {
         nama: "Siswa Baru",
         jabatan: "Siswa",
-        hobi: "Membaca",
-        catatan: "-",
+        facts: [{ label: "Hobi", value: "Membaca" }],
         foto: "asset/profil/siswa.webp",
       },
     ), createdResponse);
@@ -449,10 +469,12 @@ test("admin can create, edit, archive, and restore student cards", async () => {
       "PATCH",
       "/api/admin/students/s01",
       headers,
-      { hobi: "Bersepeda" },
+      { facts: [{ label: "Hobi", value: "Bersepeda" }] },
     ), updatedResponse);
     assert.equal(updatedResponse.statusCode, 200);
-    assert.equal(JSON.parse(updatedResponse.body).student.hobi, "Bersepeda");
+    assert.deepEqual(JSON.parse(updatedResponse.body).student.facts, [
+      { label: "Hobi", value: "Bersepeda" },
+    ]);
 
     const archivedResponse = createResponse();
     await handler(createRequest("DELETE", "/api/admin/students/s01", headers), archivedResponse);

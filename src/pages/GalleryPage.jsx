@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { MediaUploader } from "../components/MediaUploader.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
-import { GALERI } from "../data/class-data.js";
 
 function galleryImage(photo, size) {
   return photo.url || photo.foto || `https://picsum.photos/seed/${photo.seed}/${size}`;
@@ -183,13 +182,7 @@ export function GalleryPage() {
 
   const publishedPhotos = photos.filter(photo => photo.isPublished !== false);
   const archivedPhotos = photos.filter(photo => photo.isPublished === false);
-  const displayPhotos = canManageMedia
-    ? publishedPhotos
-    : publishedPhotos.length > 0
-      ? publishedPhotos
-      : status === "loading"
-        ? []
-        : GALERI;
+  const displayPhotos = publishedPhotos;
   const isOpen = selectedIndex !== null && selectedIndex < displayPhotos.length;
   const selectedPhoto = isOpen ? displayPhotos[selectedIndex] : null;
 

@@ -10,12 +10,4 @@ export const {
   UI,
   HARI_LIST,
   HARI_AKTIF,
-  GURU,
-  SISWA,
-  PIKET,
-  GURU_JADWAL,
-  JADWAL_LAMA,
-  JADWAL,
-  GALERI,
-  VIDEO,
 } = classData;
