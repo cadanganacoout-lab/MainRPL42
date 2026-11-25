@@ -17,6 +17,12 @@ const SCREENSHOT_DIR = path.join(REPORT_DIR, 'screenshots');
 const routes = ['beranda','siswa','guru','galeri','video','komentar'];
 const results = [];
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+async function waitForInitialLoading(page) {
+  await page.waitForFunction(
+    () => !document.querySelector('.initial-loading-screen'),
+    {timeout: 10000}
+  );
+}
 const browserCards = [
   {id: 's01', slug: 'browser-student-one', nama: 'Browser Student One', jabatan: 'Ketua Kelas', facts: [], foto: '', sortOrder: 1},
   {id: 's02', slug: 'browser-student-two', nama: 'Browser Student Two', jabatan: 'Siswa', facts: [], foto: '', sortOrder: 2}
@@ -213,15 +219,43 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       try {
         const routeHash = route === 'video' ? '/video?id=v02' : `/${route}`;
         const url = `http://127.0.0.1:${address.port}/index.html#${routeHash}`;
+        const splashStartedAt = Date.now();
         await page.goto(url, {waitUntil: 'domcontentloaded', timeout: 30000});
         await page.waitForSelector('#root > *', {timeout: 10000});
         if (route === 'beranda') {
+          await page.waitForSelector('.initial-loading-screen', {timeout: 10000});
+          assert.equal(
+            await page.$eval('.initial-loading-screen p', message => message.textContent),
+            'Wait, load some content...'
+          );
+          assert.equal(
+            await page.$eval('.site-foreground', foreground => foreground.inert),
+            true,
+            'The page behind the startup screen is inert.'
+          );
+          assert.equal(
+            await page.$eval('.initial-loading-spinner', spinner => getComputedStyle(spinner).borderRadius),
+            '50%'
+          );
           assert.ok(await page.$('.welcome-gallery-loading'), 'Welcome gallery shows skeletons while database photos load.');
           assert.equal(
             await page.$$eval('.gallery-highlight-card--skeleton', cards => cards.length),
             8,
             'Gallery spotlights reserve their layout while database photos load.'
           );
+          assert.ok(
+            await page.$('.welcome-gallery-tile.is-image-loading .welcome-gallery-tile-skeleton'),
+            'Welcome gallery retains image skeletons while image requests are pending.'
+          );
+          await waitForInitialLoading(page);
+          assert.ok(Date.now() - splashStartedAt >= 5000, 'The startup screen stays visible for five seconds.');
+          assert.equal(
+            await page.$eval('.site-foreground', foreground => foreground.inert),
+            false,
+            'The page becomes interactive after the startup screen closes.'
+          );
+        } else {
+          await waitForInitialLoading(page);
         }
         await wait(250);
         stage = 'mobile touch-hover check';
@@ -238,6 +272,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
           await mockSiteApi(mobilePage);
           await mobilePage.setViewport({width: 390, height: 844, isMobile: true, hasTouch: true});
           await mobilePage.goto(url, {waitUntil: 'domcontentloaded', timeout: 30000});
+          await waitForInitialLoading(mobilePage);
           await mobilePage.waitForSelector(mobileHoverTargets[route], {timeout: 10000});
           assert.equal(
             await mobilePage.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches),
@@ -321,10 +356,6 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
           } else if (route === 'beranda') {
             stage = 'welcome and navbar checks';
             assert.ok(await page.$('.hero-beranda'), 'Home page renders the class hero.');
-            await page.waitForSelector(
-              '.welcome-gallery-tile.is-image-loading .welcome-gallery-tile-skeleton',
-              {timeout: 10000}
-            );
             await page.waitForSelector('.gallery-highlight-card img', {timeout: 10000});
             await page.evaluate(() => document.getElementById('gallery-spotlight').scrollIntoView({
               block: 'center',
@@ -828,6 +859,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/card-saya`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(mobileBackgroundPage);
       await mobileBackgroundPage.waitForSelector('.media-uploader-preview--background img');
       const backgroundPreviewBounds = await mobileBackgroundPage.evaluate(() => {
         const preview = document.querySelector('.media-uploader-preview--background');
@@ -932,6 +964,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
           `http://127.0.0.1:${address.port}/index.html#/login?next=${encodeURIComponent(next)}`,
           {waitUntil: 'domcontentloaded', timeout: 30000}
         );
+        await waitForInitialLoading(authPage);
         await authPage.waitForSelector('#login-username');
         assert.equal(
           await authPage.$eval('#login-username', input => input.autocomplete),
@@ -1058,6 +1091,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/profil/student_01`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(publicProfilePage);
       await publicProfilePage.waitForSelector('.profile-card .people-card');
       assert.match(
         await publicProfilePage.$eval('.profile-header h1', node => node.textContent),
@@ -1116,6 +1150,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/profil`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(ownedProfilePage);
       await ownedProfilePage.waitForSelector('.profile-header h1');
       await ownedProfilePage.waitForSelector('button[aria-controls="profile-name-editor"]');
       await ownedProfilePage.click('button[aria-controls="profile-name-editor"]');
@@ -1178,6 +1213,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/card-saya`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(cardEditorPage);
       await cardEditorPage.waitForSelector('#card-fact-value-0');
       assert.match(
         await cardEditorPage.$eval('.dashboard-sidebar-account', node => node.textContent),
@@ -1197,6 +1233,24 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `The student edit form should stay to the right of the card preview: ${JSON.stringify(studentEditorPlacement)}`
       );
       assert.equal(studentEditorPlacement.position, 'sticky');
+      const studentFactFields = await cardEditorPage.evaluate(() => {
+        const editor = document.querySelector('.card-fact-editor');
+        const labels = [...editor.querySelectorAll('label')].map(label => label.getBoundingClientRect());
+        const inputs = [...editor.querySelectorAll('input')].map(input => input.getBoundingClientRect());
+        return {
+          columns: getComputedStyle(editor).gridTemplateColumns.split(' ').length,
+          inputsWideEnough: inputs.every(input => input.width > 200),
+          labelsDoNotOverlapInputs: labels.every((label, index) => label.right <= inputs[index].left + 1)
+        };
+      });
+      assert.equal(studentFactFields.columns, 2, 'Desktop fact fields use aligned label and input columns.');
+      assert.equal(studentFactFields.inputsWideEnough, true, 'Desktop fact inputs have room for readable values.');
+      assert.equal(studentFactFields.labelsDoNotOverlapInputs, true, 'Fact labels do not collide with their inputs.');
+      fs.mkdirSync(SCREENSHOT_DIR, {recursive: true});
+      await cardEditorPage.screenshot({
+        path: path.join(SCREENSHOT_DIR, 'card-editor-form-desktop.png'),
+        fullPage: false
+      });
       await cardEditorPage.click('#card-fact-value-0');
       await cardEditorPage.keyboard.down('Control');
       await cardEditorPage.keyboard.press('A');
@@ -1223,6 +1277,20 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         1,
         'Rejecting unsaved navigation restores the route without prompting again.'
       );
+      await cardEditorPage.setViewport({width: 390, height: 844});
+      const mobileFactFields = await cardEditorPage.evaluate(() => {
+        const editor = document.querySelector('.card-fact-editor');
+        const input = editor.querySelector('input');
+        return {
+          columns: getComputedStyle(editor).gridTemplateColumns.split(' ').length,
+          inputWidth: input.getBoundingClientRect().width,
+          formPosition: getComputedStyle(document.querySelector('.card-editor-form')).position,
+          viewport: window.innerWidth
+        };
+      });
+      assert.equal(mobileFactFields.columns, 1, 'Mobile fact labels and inputs stack in one column.');
+      assert.ok(mobileFactFields.inputWidth > 240 && mobileFactFields.inputWidth < mobileFactFields.viewport);
+      assert.equal(mobileFactFields.formPosition, 'static');
       assert.equal(cardEditorErrors.length, 0, 'Card editor should not raise browser errors.');
     } finally {
       await cardEditorPage.close();
@@ -1274,6 +1342,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/admin/data?kind=students`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(adminDashboardPage);
       await adminDashboardPage.waitForSelector('.admin-record-grid');
       assert.match(
         await adminDashboardPage.$eval('.dashboard-sidebar-account', node => node.textContent),
@@ -1331,6 +1400,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/admin?tab=schedule`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(adminDashboardPage);
       await adminDashboardPage.waitForSelector('.dashboard-agenda-table');
       assert.equal(await adminDashboardPage.$$('.dashboard-agenda-table').then(tables => tables.length), 1);
       assert.equal(await adminDashboardPage.$$('.dashboard-agenda-day-button').then(buttons => buttons.length), 6);
@@ -1407,6 +1477,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         `http://127.0.0.1:${address.port}/index.html#/dashboard`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
+      await waitForInitialLoading(memberDashboardPage);
       await memberDashboardPage.waitForSelector('.dashboard-sidebar-account');
       assert.match(
         await memberDashboardPage.$eval('.dashboard-sidebar-account', node => node.textContent),

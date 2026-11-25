@@ -232,7 +232,13 @@ function RouteContent({ route }) {
 
 function SiteApplication() {
   const [route, setRoute] = useState(readRoute);
+  const [showInitialLoading, setShowInitialLoading] = useState(true);
   const previousPage = useRef(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setShowInitialLoading(false), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   useEffect(() => {
     function updateRoute() {
@@ -283,7 +289,7 @@ function SiteApplication() {
   return (
     <>
       <StarfieldBackground />
-      <div className="site-foreground">
+      <div className="site-foreground" inert={showInitialLoading}>
         <a
           className="skip-link"
           href="#main"
@@ -306,6 +312,15 @@ function SiteApplication() {
         <SiteFooter isHome={route.page === "beranda"} />
         <GlobalChatWidget routePage={route.page} />
       </div>
+      {showInitialLoading && (
+        <div className="initial-loading-screen" role="status" aria-live="polite">
+          <progress
+            className="initial-loading-spinner"
+            aria-label="Loading content"
+          />
+          <p>Wait, load some content...</p>
+        </div>
+      )}
     </>
   );
 }

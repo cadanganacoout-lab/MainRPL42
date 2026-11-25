@@ -299,6 +299,66 @@
   margin: 0;
 }
 
+.card-facts-fields {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.85rem;
+}
+
+.card-facts-fields legend {
+  padding-inline: 0.4rem;
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.card-facts-fields > p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.card-fact-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: var(--color-surface-muted);
+}
+
+.card-fact-number {
+  grid-column: 1 / -1;
+  color: var(--color-accent-strong);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.card-fact-editor label {
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.card-fact-editor input {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.6rem;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: max(1rem, 1em);
+}
+
 .dashboard-profile-form,
 .dashboard-agenda-meta {
   display: grid;
@@ -785,6 +845,14 @@
     position: static;
     max-height: none;
     overflow: visible;
+  }
+
+  .card-fact-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-fact-number {
+    grid-column: auto;
   }
 
   .dashboard-page--card-editor .card-editor-layout {
