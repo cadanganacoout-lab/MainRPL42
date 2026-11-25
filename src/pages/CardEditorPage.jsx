@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
+import { DashboardSidebar } from "../components/DashboardSidebar.jsx";
 import { StudentCard } from "../components/StudentCard.jsx";
 import { MediaUploader } from "../components/MediaUploader.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest } from "../lib/api.js";
 
 const FACT_LIMIT = 5;
@@ -41,6 +43,7 @@ function CardEditorLoading() {
 }
 
 export function CardEditorPage() {
+  const { user } = useAuth();
   const [card, setCard] = useState(null);
   const [draft, setDraft] = useState(null);
   const [status, setStatus] = useState("loading");
@@ -181,13 +184,15 @@ export function CardEditorPage() {
   }
 
   return (
-    <>
-      <section className="container page-hero">
-        <span className="route-label">/card-saya</span>
-        <h1>Edit card saya</h1>
-        <p>Perbarui informasi card yang ditautkan ke akun Anda.</p>
-      </section>
-      <section className="container card-editor-page">
+    <section className="dashboard-page dashboard-page--user dashboard-page--card-editor">
+      <DashboardSidebar user={user} active="card" />
+      <div className="dashboard-main">
+        <section className="container page-hero">
+          <span className="route-label">/card-saya</span>
+          <h1>Edit card saya</h1>
+          <p>Perbarui informasi card yang ditautkan ke akun Anda.</p>
+        </section>
+        <section className="container card-editor-page">
         {status === "loading" && <CardEditorLoading />}
         {status === "error" && (
           <div className="student-list-message" role="alert">
@@ -287,7 +292,8 @@ export function CardEditorPage() {
             </aside>
           </div>
         )}
-      </section>
-    </>
+        </section>
+      </div>
+    </section>
   );
 }

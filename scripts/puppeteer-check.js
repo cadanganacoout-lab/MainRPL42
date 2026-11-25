@@ -40,7 +40,8 @@ const browserVideos = Array.from({length: 9}, (_, index) => ({
 }));
 const browserAgendaDays = Object.fromEntries(
   ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map(day => [day, [
-    {mulai: '08:00', selesai: '08:45', mapel: 'Pemrograman', teacherId: 'g01'}
+    {mulai: '08:00', selesai: '08:45', mapel: 'Pemrograman', teacherId: 'g01'},
+    {text: 'Catatan jadwal kelas tanpa rentang waktu untuk menguji tampilan agenda.'}
   ]])
 );
 const browserAgendaDuties = Object.fromEntries(
@@ -51,6 +52,49 @@ const browserAgendaDuties = Object.fromEntries(
 const browserAgenda = {
   schedule: {ganjil: browserAgendaDays, genap: browserAgendaDays},
   duties: browserAgendaDuties
+};
+const browserAdminStudents = Array.from({length: 6}, (_, index) => ({
+  id: `admin-s${String(index + 1).padStart(2, '0')}`,
+  nama: `Admin Student ${index + 1}`,
+  jabatan: index === 0 ? 'Ketua Kelas' : 'Siswa',
+  facts: [],
+  foto: '',
+  isPublished: true
+}));
+const browserAdminTeachers = Array.from({length: 4}, (_, index) => ({
+  id: `admin-g${String(index + 1).padStart(2, '0')}`,
+  nama: `Admin Teacher ${index + 1}`,
+  mapel: 'Pemrograman',
+  role: 'Guru Teori',
+  foto: '',
+  isActive: true
+}));
+const browserAdminGallery = Array.from({length: 4}, (_, index) => ({
+  id: `admin-photo-${index + 1}`,
+  caption: `Foto admin ${index + 1}`,
+  url: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='9'%3E%3Crect width='16' height='9' fill='%2373c9b2'/%3E%3C/svg%3E`,
+  isPublished: true,
+  sortOrder: index + 1
+}));
+const browserAdminVideos = Array.from({length: 4}, (_, index) => ({
+  id: `admin-v${String(index + 1).padStart(2, '0')}`,
+  judul: `Video admin ${index + 1}`,
+  deskripsi: 'Fixture browser test',
+  youtubeId: 'dQw4w9WgXcQ',
+  isActive: true
+}));
+const browserAdminAgendaDays = Object.fromEntries(
+  ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'].map(day => [day, Array(15).fill(null)])
+);
+const browserAdminAgenda = {
+  classId: 'class-01',
+  className: 'XI RPL',
+  academicYear: '2025/2026',
+  schedule: {
+    ganjil: browserAdminAgendaDays,
+    genap: browserAdminAgendaDays
+  },
+  duties: browserAdminAgendaDays
 };
 
 async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
@@ -148,6 +192,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       const file = path.join(ROOT_DIR, "index.html");
       if (!fs.existsSync(file)) continue;
       const page = await browser.newPage();
+      await page.setViewport({width: 1027, height: 667});
       const messages = [];
       let stage = 'page load';
       await mockSiteApi(page, {
@@ -360,6 +405,56 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
               videoCards.every(card => card.href?.startsWith('#/video?id=') && card.title && card.poster),
               'Video cards keep their titles, posters, and direct playback links.'
             );
+            const spotlightBento = await page.evaluate(() => {
+              const measure = selector => {
+                const cards = [...document.querySelectorAll(selector)];
+                const featured = cards[0];
+                const next = cards[1];
+                const featuredBounds = featured.getBoundingClientRect();
+                const nextBounds = next.getBoundingClientRect();
+                return {
+                  featuredWidth: featuredBounds.width,
+                  featuredHeight: featuredBounds.height,
+                  standardWidth: nextBounds.width,
+                  standardHeight: nextBounds.height,
+                  className: featured.className,
+                  gridRowEnd: getComputedStyle(featured).gridRowEnd,
+                  gridColumnEnd: getComputedStyle(featured).gridColumnEnd
+                };
+              };
+              return {
+                gallery: measure('.gallery-highlight-card'),
+                video: measure('.video-highlight-card')
+              };
+            });
+            for (const [section, layout] of Object.entries(spotlightBento)) {
+              assert.ok(
+                layout.featuredWidth > layout.standardWidth * 1.7 &&
+                  layout.featuredHeight > layout.standardHeight * 1.5,
+                `${section} highlights use an oversized lead card: ${JSON.stringify(layout)}`
+              );
+              assert.match(
+                layout.className,
+                /--featured/,
+                `${section} lead card receives its featured layout class.`
+              );
+            }
+            await page.evaluate(() => document.getElementById('gallery-spotlight').scrollIntoView({
+              block: 'start',
+              behavior: 'instant'
+            }));
+            await page.screenshot({
+              path: path.join(SCREENSHOT_DIR, 'home-bento-desktop.png'),
+              fullPage: false
+            });
+            await page.evaluate(() => document.getElementById('video-spotlight').scrollIntoView({
+              block: 'start',
+              behavior: 'instant'
+            }));
+            await page.screenshot({
+              path: path.join(SCREENSHOT_DIR, 'home-video-bento-desktop.png'),
+              fullPage: false
+            });
             await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'no-preference'}]);
             assert.equal(
               await page.$eval('.video-highlight-card', card => getComputedStyle(card).animationName),
@@ -405,6 +500,26 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
               'The main navigation appears after scrolling past the welcome hero.'
             );
             assert.equal((await page.$$('.stat-card')).length, 5);
+            const statGeometry = await page.$$eval('.stat-row > .stat-card', cards => (
+              cards.map(card => {
+                const {left, top, right, bottom} = card.getBoundingClientRect();
+                return {left, top, right, bottom};
+              })
+            ));
+            assert.equal(statGeometry.length, 5, 'All summary cards are direct grid items.');
+            assert.ok(
+              statGeometry.every((card, index) => statGeometry.slice(index + 1).every(other =>
+                card.right <= other.left || other.right <= card.left ||
+                card.bottom <= other.top || other.bottom <= card.top
+              )),
+              'Summary cards do not overlap.'
+            );
+            const untimedAgenda = await page.$eval('.agenda-row--text', row => ({
+              columns: getComputedStyle(row).gridTemplateColumns.split(' ').length,
+              contentWidth: row.querySelector('.agenda-row-content').getBoundingClientRect().width
+            }));
+            assert.equal(untimedAgenda.columns, 2, 'Untimed agenda notes use a marker and full-width content track.');
+            assert.ok(untimedAgenda.contentWidth > 300, 'Untimed agenda notes have enough room to wrap naturally.');
             assert.ok(await page.$('.agenda-card--schedule'), 'Home page renders the schedule dashboard.');
             assert.ok(await page.$('.agenda-card--duty'), 'Home page renders the duty dashboard.');
             assert.equal((await page.$$('.agenda-day-button')).length, 2);
@@ -600,6 +715,22 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
             overflowDetails.documentWidth <= overflowDetails.viewportWidth,
             `${route} should not overflow horizontally at mobile width: ${JSON.stringify(overflowDetails)}`
           );
+          if (route === 'beranda') {
+            const mobileSpotlight = await page.evaluate(() => ({
+              galleryColumns: getComputedStyle(document.querySelector('.gallery-highlight-stage')).gridTemplateColumns.split(' ').length,
+              galleryFeaturedWidth: document.querySelector('.gallery-highlight-card').getBoundingClientRect().width,
+              videoColumns: getComputedStyle(document.querySelector('.video-highlight-grid')).gridTemplateColumns.split(' ').length,
+              videoFeaturedWidth: document.querySelector('.video-highlight-card').getBoundingClientRect().width,
+              viewport: window.innerWidth
+            }));
+            assert.equal(mobileSpotlight.galleryColumns, 2);
+            assert.equal(mobileSpotlight.videoColumns, 2);
+            assert.ok(
+              mobileSpotlight.galleryFeaturedWidth < mobileSpotlight.viewport &&
+                mobileSpotlight.videoFeaturedWidth < mobileSpotlight.viewport,
+              `Mobile bento cards should fit the layout container: ${JSON.stringify(mobileSpotlight)}`
+            );
+          }
           stage = 'mobile navigation menu';
           await page.click('.menu-toggle');
           assert.equal(
@@ -630,6 +761,25 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
         const ssPath = path.join(SCREENSHOT_DIR, route + '.png');
         fs.mkdirSync(path.dirname(ssPath), {recursive:true});
         await page.screenshot({path:ssPath, fullPage:false});
+        if (route === 'beranda') {
+          await page.setViewport({width: 1027, height: 667});
+          await page.evaluate(() => document.getElementById('dashboard').scrollIntoView({
+            block: 'start',
+            behavior: 'instant'
+          }));
+          await page.screenshot({
+            path: path.join(SCREENSHOT_DIR, 'beranda-desktop.png'),
+            fullPage: false
+          });
+          await page.evaluate(() => document.querySelector('.stat-row').scrollIntoView({
+            block: 'center',
+            behavior: 'instant'
+          }));
+          await page.screenshot({
+            path: path.join(SCREENSHOT_DIR, 'beranda-summary-desktop.png'),
+            fullPage: false
+          });
+        }
         results.push({file:route, messages, screenshot:ssPath});
       } catch (err) {
         results.push({file:route, error: `${stage}: ${(err && err.message) || String(err)}`, messages});
@@ -1023,11 +1173,30 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       await dialog.dismiss();
     });
     try {
+      await cardEditorPage.setViewport({width: 1440, height: 900});
       await cardEditorPage.goto(
         `http://127.0.0.1:${address.port}/index.html#/card-saya`,
         {waitUntil: 'domcontentloaded', timeout: 30000}
       );
       await cardEditorPage.waitForSelector('#card-fact-value-0');
+      assert.match(
+        await cardEditorPage.$eval('.dashboard-sidebar-account', node => node.textContent),
+        /Browser Student/
+      );
+      const studentEditorPlacement = await cardEditorPage.evaluate(() => {
+        const preview = document.querySelector('.card-editor-preview').getBoundingClientRect();
+        const editor = document.querySelector('.card-editor-form');
+        return {
+          previewRight: preview.right,
+          editorLeft: editor.getBoundingClientRect().left,
+          position: getComputedStyle(editor).position
+        };
+      });
+      assert.ok(
+        studentEditorPlacement.editorLeft >= studentEditorPlacement.previewRight - 1,
+        `The student edit form should stay to the right of the card preview: ${JSON.stringify(studentEditorPlacement)}`
+      );
+      assert.equal(studentEditorPlacement.position, 'sticky');
       await cardEditorPage.click('#card-fact-value-0');
       await cardEditorPage.keyboard.down('Control');
       await cardEditorPage.keyboard.press('A');
@@ -1057,6 +1226,206 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       assert.equal(cardEditorErrors.length, 0, 'Card editor should not raise browser errors.');
     } finally {
       await cardEditorPage.close();
+    }
+
+    const adminDashboardPage = await browser.newPage();
+    const adminDashboardErrors = [];
+    await adminDashboardPage.setViewport({width: 1440, height: 900});
+    await adminDashboardPage.setRequestInterception(true);
+    adminDashboardPage.on('request', request => {
+      const pathname = new URL(request.url()).pathname;
+      const respond = body => request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(body)
+      });
+      if (pathname === '/api/auth/me') {
+        return respond({
+          user: {
+            username: 'admin',
+            displayName: 'Browser Admin',
+            role: 'admin',
+            mustChangePassword: false
+          }
+        });
+      }
+      if (pathname === '/api/dashboard/summary') {
+        return respond({students: 6, teachers: 4, photos: 4, videos: 4});
+      }
+      if (pathname === '/api/admin/students') return respond({students: browserAdminStudents});
+      if (pathname === '/api/admin/teachers') return respond({teachers: browserAdminTeachers});
+      if (pathname === '/api/admin/gallery') return respond({photos: browserAdminGallery});
+      if (pathname === '/api/admin/videos') return respond({videos: browserAdminVideos});
+      if (pathname === '/api/admin/agenda') return respond({agenda: browserAdminAgenda});
+      if (pathname === '/api/teachers') return respond({teachers: browserAdminTeachers});
+      if (pathname === '/api/cards') return respond({cards: browserAdminStudents});
+      if (request.url().startsWith('https://img.youtube.com/')) {
+        return request.respond({
+          status: 200,
+          contentType: 'image/svg+xml',
+          body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="#73c9b2"/></svg>'
+        });
+      }
+      return request.continue();
+    });
+    adminDashboardPage.on('pageerror', error => adminDashboardErrors.push(error.message));
+    try {
+      await adminDashboardPage.goto(
+        `http://127.0.0.1:${address.port}/index.html#/admin/data?kind=students`,
+        {waitUntil: 'domcontentloaded', timeout: 30000}
+      );
+      await adminDashboardPage.waitForSelector('.admin-record-grid');
+      assert.match(
+        await adminDashboardPage.$eval('.dashboard-sidebar-account', node => node.textContent),
+        /Browser Admin/
+      );
+      const studentGridColumns = await adminDashboardPage.$eval(
+        '.admin-record-grid',
+        grid => getComputedStyle(grid).gridTemplateColumns.split(' ').length
+      );
+      assert.equal(studentGridColumns, 3, 'Admin student records use three cards per row on desktop.');
+      await adminDashboardPage.click('.admin-record-card .admin-record-actions button');
+      await adminDashboardPage.waitForSelector('.admin-data-editor');
+      const editorPlacement = await adminDashboardPage.evaluate(() => {
+        const list = document.querySelector('.admin-data-list').getBoundingClientRect();
+        const editor = document.querySelector('.admin-data-editor');
+        const bounds = editor.getBoundingClientRect();
+        return {
+          listRight: list.right,
+          editorLeft: bounds.left,
+          position: getComputedStyle(editor).position
+        };
+      });
+      assert.ok(
+        editorPlacement.editorLeft >= editorPlacement.listRight - 1,
+        `The edit panel should sit to the right of the cards: ${JSON.stringify(editorPlacement)}`
+      );
+      assert.equal(editorPlacement.position, 'sticky', 'The desktop edit panel stays visible while scrolling.');
+      fs.mkdirSync(SCREENSHOT_DIR, {recursive: true});
+      await adminDashboardPage.screenshot({
+        path: path.join(SCREENSHOT_DIR, 'admin-dashboard-edit-desktop.png'),
+        fullPage: false
+      });
+
+      await adminDashboardPage.click('.admin-data-subtabs button:nth-child(2)');
+      await adminDashboardPage.waitForFunction(
+        () => document.querySelector('#admin-records-heading')?.textContent.includes('guru')
+      );
+      await adminDashboardPage.click('.admin-data-tabs[aria-label="Bagian data admin"] button:nth-child(2)');
+      await adminDashboardPage.waitForSelector('.admin-record-grid');
+      assert.match(
+        await adminDashboardPage.$eval('#admin-records-heading', node => node.textContent),
+        /Foto galeri/
+      );
+      assert.equal(
+        await adminDashboardPage.$$('.admin-record-card').then(cards => cards.length),
+        4,
+        'The combined gallery section loads photos from the admin gallery API response.'
+      );
+      await adminDashboardPage.click('.admin-data-subtabs button:nth-child(2)');
+      await adminDashboardPage.waitForFunction(
+        () => document.querySelector('#admin-records-heading')?.textContent.includes('video')
+      );
+
+      await adminDashboardPage.goto(
+        `http://127.0.0.1:${address.port}/index.html#/admin?tab=schedule`,
+        {waitUntil: 'domcontentloaded', timeout: 30000}
+      );
+      await adminDashboardPage.waitForSelector('.dashboard-agenda-table');
+      assert.equal(await adminDashboardPage.$$('.dashboard-agenda-table').then(tables => tables.length), 1);
+      assert.equal(await adminDashboardPage.$$('.dashboard-agenda-day-button').then(buttons => buttons.length), 6);
+      assert.match(
+        await adminDashboardPage.$eval('.dashboard-agenda-table caption', node => node.textContent),
+        /Senin/
+      );
+      await adminDashboardPage.click('.dashboard-agenda-day-button:nth-child(3)');
+      assert.match(
+        await adminDashboardPage.$eval('.dashboard-agenda-table caption', node => node.textContent),
+        /Rabu/
+      );
+      await adminDashboardPage.click('.dashboard-sidebar a[href="#/admin?tab=duties"]');
+      await adminDashboardPage.waitForSelector('.dashboard-agenda-table caption');
+      assert.match(
+        await adminDashboardPage.$eval('.dashboard-agenda-table caption', node => node.textContent),
+        /Piket hari Senin/
+      );
+      await adminDashboardPage.setViewport({width: 390, height: 844});
+      const adminMobileWidth = await adminDashboardPage.evaluate(() => ({
+        document: document.documentElement.scrollWidth,
+        viewport: window.innerWidth
+      }));
+      assert.ok(
+        adminMobileWidth.document <= adminMobileWidth.viewport,
+        `Admin agenda remains within the mobile viewport: ${JSON.stringify(adminMobileWidth)}`
+      );
+      assert.equal(adminDashboardErrors.length, 0, `Admin dashboard errors: ${adminDashboardErrors.join('; ')}`);
+      results.push({file: 'admin-dashboard-layout', editorPlacement, studentGridColumns, adminMobileWidth});
+    } finally {
+      await adminDashboardPage.close();
+    }
+
+    const memberDashboardPage = await browser.newPage();
+    const memberDashboardErrors = [];
+    await memberDashboardPage.setViewport({width: 390, height: 844});
+    await memberDashboardPage.setRequestInterception(true);
+    memberDashboardPage.on('request', request => {
+      const pathname = new URL(request.url()).pathname;
+      const respond = body => request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(body)
+      });
+      if (pathname === '/api/auth/me') {
+        return respond({
+          user: {
+            username: 'browser_member',
+            displayName: 'Browser Member',
+            role: 'member',
+            mustChangePassword: false
+          }
+        });
+      }
+      if (pathname === '/api/dashboard/summary') {
+        return respond({students: 6, teachers: 4, photos: 4, videos: 4});
+      }
+      if (pathname === '/api/profile/me') {
+        return respond({
+          user: {
+            username: 'browser_member',
+            displayName: 'Browser Member',
+            role: 'member',
+            profileVisible: true,
+            avatar: null
+          }
+        });
+      }
+      return request.continue();
+    });
+    memberDashboardPage.on('pageerror', error => memberDashboardErrors.push(error.message));
+    try {
+      await memberDashboardPage.goto(
+        `http://127.0.0.1:${address.port}/index.html#/dashboard`,
+        {waitUntil: 'domcontentloaded', timeout: 30000}
+      );
+      await memberDashboardPage.waitForSelector('.dashboard-sidebar-account');
+      assert.match(
+        await memberDashboardPage.$eval('.dashboard-sidebar-account', node => node.textContent),
+        /Browser Member/
+      );
+      await memberDashboardPage.click('.dashboard-panel-heading .button-primary');
+      await memberDashboardPage.waitForSelector('#dashboard-profile-visible');
+      const memberMobileWidth = await memberDashboardPage.evaluate(() => ({
+        document: document.documentElement.scrollWidth,
+        viewport: window.innerWidth
+      }));
+      assert.ok(
+        memberMobileWidth.document <= memberMobileWidth.viewport,
+        `Member dashboard remains within the mobile viewport: ${JSON.stringify(memberMobileWidth)}`
+      );
+      assert.equal(memberDashboardErrors.length, 0, `Member dashboard errors: ${memberDashboardErrors.join('; ')}`);
+      results.push({file: 'member-dashboard-layout', memberMobileWidth});
+    } finally {
+      await memberDashboardPage.close();
     }
   } finally {
     if (browser) await browser.close();

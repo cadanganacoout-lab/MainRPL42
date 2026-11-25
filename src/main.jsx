@@ -216,7 +216,7 @@ function RouteContent({ route }) {
     if (route.pathname === "/admin/data") {
       return (
         <RequireRole roles={["admin"]}>
-          <AdminDataPage />
+          <AdminDataPage route={route} />
         </RequireRole>
       );
     }

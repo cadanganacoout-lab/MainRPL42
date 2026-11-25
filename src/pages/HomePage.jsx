@@ -311,6 +311,7 @@ function ScheduleList({ date, now, isToday, agenda, teachers }) {
       : 0;
     const rowClassName = [
       "agenda-row",
+      !hasTime && "agenda-row--text",
       row.istirahat && "agenda-row--break",
       isCurrent && "agenda-row--current",
       isNext && "agenda-row--next",
@@ -644,22 +645,22 @@ export function HomePage() {
                 <span className="stat-value">{summary?.teachers ?? "—"}</span>
                 <span className="stat-label">{UI.home.summary.teacherLabel}</span>
               </div>
-              <div className="stat-item stat-card">
-                <span className="stat-icon"><Icon name="image" /></span>
-                <div className="stat-body">
-                  <span className="stat-value">{summary?.photos ?? "—"}</span>
-                  <span className="stat-label">Foto galeri</span>
-                </div>
-              </div>
-              <div className="stat-item stat-card">
-                <span className="stat-icon"><Icon name="play" /></span>
-                <div className="stat-body">
-                  <span className="stat-value">{summary?.videos ?? "—"}</span>
-                  <span className="stat-label">Video</span>
-                </div>
+            </div>
+            <div className="stat-item stat-card">
+              <span className="stat-icon"><Icon name="image" /></span>
+              <div className="stat-body">
+                <span className="stat-value">{summary?.photos ?? "—"}</span>
+                <span className="stat-label">Foto galeri</span>
               </div>
             </div>
             <div className="stat-item stat-card">
+              <span className="stat-icon"><Icon name="play" /></span>
+              <div className="stat-body">
+                <span className="stat-value">{summary?.videos ?? "—"}</span>
+                <span className="stat-label">Video</span>
+              </div>
+            </div>
+            <div className="stat-item stat-card stat-item--homeroom">
               <span className="stat-icon"><Icon name="badge" /></span>
               <div className="stat-body">
                 <span className="stat-value stat-value--name">{SITE.waliKelas}</span>

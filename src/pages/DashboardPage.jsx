@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { DashboardSidebar } from "../components/DashboardSidebar.jsx";
 import { MediaUploader } from "../components/MediaUploader.jsx";
 import { StudentCard } from "../components/StudentCard.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -46,38 +47,6 @@ function useDashboardSummary() {
   }, []);
 
   return { summary, error };
-}
-
-const adminNav = [
-  { label: "Ringkasan", href: "#/admin" },
-  { label: "Siswa", href: "#/admin/data?kind=students" },
-  { label: "Guru", href: "#/admin/data?kind=teachers" },
-  { label: "Galeri", href: "#/galeri" },
-  { label: "Video", href: "#/admin/data?kind=videos" },
-  { label: "Akun siswa", href: "#/admin?tab=accounts" },
-  { label: "Jadwal pelajaran", href: "#/admin?tab=schedule" },
-  { label: "Piket kelas", href: "#/admin?tab=duties" },
-];
-
-function AdminSidebar({ tab }) {
-  return (
-    <nav className="dashboard-sidebar" aria-label="Navigasi dashboard admin">
-      {adminNav.map(item => (
-        <a
-          href={item.href}
-          key={item.href}
-          aria-current={
-            (tab === "overview" && item.href === "#/admin") ||
-            (item.href.includes(`tab=${tab}`) && tab !== "overview")
-              ? "page"
-              : undefined
-          }
-        >
-          {item.label}
-        </a>
-      ))}
-    </nav>
-  );
 }
 
 function StudentDashboard({ user, summary, summaryError }) {
@@ -134,6 +103,7 @@ function MemberDashboard({ user, summary, summaryError }) {
   const [profile, setProfile] = useState(null);
   const [displayName, setDisplayName] = useState(user.displayName);
   const [profileVisible, setProfileVisible] = useState(true);
+  const [editing, setEditing] = useState(false);
   const [status, setStatus] = useState("loading");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -175,6 +145,7 @@ function MemberDashboard({ user, summary, summaryError }) {
       setDisplayName(payload.user.displayName);
       setProfileVisible(payload.user.profileVisible !== false);
       setNotice("Informasi profil berhasil disimpan.");
+      setEditing(false);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -196,51 +167,103 @@ function MemberDashboard({ user, summary, summaryError }) {
             <h2 id="member-profile-title">Informasi saya</h2>
             <p>Profil dapat disembunyikan dari daftar tamu publik kapan saja.</p>
           </div>
+          {status === "ready" && profile && !editing && (
+            <button
+              className="button-primary"
+              type="button"
+              onClick={() => {
+                setDisplayName(profile.displayName);
+                setProfileVisible(profile.profileVisible !== false);
+                setError("");
+                setNotice("");
+                setEditing(true);
+              }}
+            >
+              Edit profil
+            </button>
+          )}
         </div>
         {status === "loading" && <p role="status">Memuat profil…</p>}
         {status === "error" && <p className="admin-data-error" role="alert">{error}</p>}
         {status === "ready" && profile && (
-          <div className="dashboard-profile-layout">
-            <form className="dashboard-profile-form" onSubmit={saveProfile} aria-busy={saving}>
-              <label htmlFor="dashboard-display-name">Nama tampilan</label>
-              <input
-                id="dashboard-display-name"
-                name="displayName"
-                value={displayName}
-                maxLength={40}
-                required
-                autoComplete="name"
-                onChange={event => setDisplayName(event.target.value)}
-              />
-              <label className="dashboard-privacy-toggle" htmlFor="dashboard-profile-visible">
-                <input
-                  id="dashboard-profile-visible"
-                  name="profileVisible"
-                  type="checkbox"
-                  checked={profileVisible}
-                  onChange={event => setProfileVisible(event.target.checked)}
+          <div className={`dashboard-profile-layout${editing ? " is-editing" : ""}`}>
+            <section className="dashboard-profile-summary" aria-label="Ringkasan profil">
+              {profile.avatar?.url ? (
+                <img src={profile.avatar.url} alt="" />
+              ) : (
+                <span className="dashboard-profile-avatar" aria-hidden="true">
+                  {(profile.displayName || user.username).slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <div>
+                <span>Nama tampilan</span>
+                <strong>{profile.displayName}</strong>
+                <p>
+                  Profil publik {profile.profileVisible === false ? "disembunyikan" : "ditampilkan"}.
+                </p>
+              </div>
+            </section>
+            {editing && (
+              <aside className="dashboard-profile-editor" aria-label="Edit informasi profil">
+                <form className="dashboard-profile-form" onSubmit={saveProfile} aria-busy={saving}>
+                  <div className="dashboard-profile-editor-heading">
+                    <h3>Edit profil</h3>
+                    <button
+                      className="admin-data-close"
+                      type="button"
+                      aria-label="Tutup editor profil"
+                      disabled={saving}
+                      onClick={() => {
+                        setDisplayName(profile.displayName);
+                        setProfileVisible(profile.profileVisible !== false);
+                        setEditing(false);
+                        setError("");
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <label htmlFor="dashboard-display-name">Nama tampilan</label>
+                  <input
+                    id="dashboard-display-name"
+                    name="displayName"
+                    value={displayName}
+                    maxLength={40}
+                    required
+                    autoComplete="name"
+                    onChange={event => setDisplayName(event.target.value)}
+                  />
+                  <label className="dashboard-privacy-toggle" htmlFor="dashboard-profile-visible">
+                    <input
+                      id="dashboard-profile-visible"
+                      name="profileVisible"
+                      type="checkbox"
+                      checked={profileVisible}
+                      onChange={event => setProfileVisible(event.target.checked)}
+                    />
+                    <span>Tampilkan profil saya di daftar tamu publik</span>
+                  </label>
+                  <p className="dashboard-help">
+                    Jika dimatikan, nama dan foto Anda tidak ditampilkan dalam direktori publik.
+                  </p>
+                  {error && <p className="admin-data-error" role="alert">{error}</p>}
+                  <button className="button-primary" type="submit" disabled={saving}>
+                    {saving ? "Menyimpan…" : "Simpan profil"}
+                  </button>
+                </form>
+                <MediaUploader
+                  targetType="member"
+                  targetId="me"
+                  mediaType="avatar"
+                  currentUrl={profile.avatar?.url || ""}
+                  removable={Boolean(profile.avatar)}
+                  onChanged={avatar => setProfile(current => ({ ...current, avatar }))}
                 />
-                <span>Tampilkan profil saya di daftar tamu publik</span>
-              </label>
-              <p className="dashboard-help">
-                Jika dimatikan, nama dan foto Anda tidak ditampilkan dalam direktori publik.
-              </p>
-              {error && <p className="admin-data-error" role="alert">{error}</p>}
-              {notice && <p className="admin-data-notice" role="status">{notice}</p>}
-              <button className="button-primary" type="submit" disabled={saving}>
-                {saving ? "Menyimpan…" : "Simpan profil"}
-              </button>
-            </form>
-            <MediaUploader
-              targetType="member"
-              targetId="me"
-              mediaType="avatar"
-              currentUrl={profile.avatar?.url || ""}
-              removable={Boolean(profile.avatar)}
-              onChanged={avatar => setProfile(current => ({ ...current, avatar }))}
-            />
+              </aside>
+            )}
           </div>
         )}
+        {notice && <p className="admin-data-notice" role="status">{notice}</p>}
       </section>
     </div>
   );
@@ -430,6 +453,7 @@ function AgendaEditor({ mode }) {
   const [teachers, setTeachers] = useState([]);
   const [students, setStudents] = useState([]);
   const [parity, setParity] = useState("ganjil");
+  const [activeDay, setActiveDay] = useState(DAYS[0]);
   const [status, setStatus] = useState("loading");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -581,20 +605,29 @@ function AgendaEditor({ mode }) {
               />
             </label>
           </div>
-          <div className="dashboard-agenda-days">
+          <div className="dashboard-agenda-day-tabs" role="group" aria-label="Pilih hari">
             {DAYS.map(day => (
-              <AgendaTable
-                key={`${mode}-${day}`}
-                agenda={agenda}
-                parity={parity}
-                day={day}
-                teachers={teachers}
-                students={students}
-                mode={mode}
-                onChange={updateSlot}
-              />
+              <button
+                type="button"
+                key={day}
+                className="dashboard-agenda-day-button"
+                aria-pressed={activeDay === day}
+                onClick={() => setActiveDay(day)}
+              >
+                {day}
+              </button>
             ))}
           </div>
+          <AgendaTable
+            key={`${mode}-${activeDay}`}
+            agenda={agenda}
+            parity={parity}
+            day={activeDay}
+            teachers={teachers}
+            students={students}
+            mode={mode}
+            onChange={updateSlot}
+          />
           {error && <p className="admin-data-error" role="alert">{error}</p>}
           {notice && <p className="admin-data-notice" role="status">{notice}</p>}
           <button className="button-primary" type="submit" disabled={saving}>
@@ -748,7 +781,7 @@ function AccountManager() {
   );
 }
 
-function AdminDashboard({ route, summary, summaryError }) {
+function AdminDashboard({ route, user, summary, summaryError }) {
   const tab = useMemo(() => {
     const query = route?.search || window.location.hash.split("?")[1] || "";
     const selected = new URLSearchParams(query.replace(/^\?/, "")).get("tab");
@@ -762,8 +795,8 @@ function AdminDashboard({ route, summary, summaryError }) {
   };
 
   return (
-    <section className="container dashboard-page">
-      <AdminSidebar tab={tab} />
+    <section className="dashboard-page">
+      <DashboardSidebar user={user} active={tab} />
       <div className="dashboard-main">
         <header className="dashboard-heading">
           <span className="route-label">/admin</span>
@@ -771,22 +804,7 @@ function AdminDashboard({ route, summary, summaryError }) {
           <p>{titles[tab][1]}</p>
         </header>
         {tab === "overview" && (
-          <>
-            <DashboardStats summary={summary} error={summaryError} />
-            <section className="dashboard-panel">
-              <div className="dashboard-panel-heading">
-                <div>
-                  <h2>Kelola website kelas</h2>
-                  <p>Pilih bagian melalui navigasi untuk memperbarui konten atau agenda.</p>
-                </div>
-              </div>
-              <div className="dashboard-quick-links">
-                {adminNav.slice(1).map(item => (
-                  <a className="dashboard-quick-link" href={item.href} key={item.href}>{item.label}</a>
-                ))}
-              </div>
-            </section>
-          </>
+          <DashboardStats summary={summary} error={summaryError} />
         )}
         {tab === "accounts" && <AccountManager />}
         {tab === "schedule" && <AgendaEditor mode="schedule" />}
@@ -801,14 +819,20 @@ export function DashboardPage({ route }) {
   const { summary, error } = useDashboardSummary();
 
   if (user.role === "admin") {
-    return <AdminDashboard route={route} summary={summary} summaryError={error} />;
+    return <AdminDashboard route={route} user={user} summary={summary} summaryError={error} />;
   }
   if (user.role === "student") {
-    return <section className="container dashboard-page dashboard-page--user">
-      <StudentDashboard user={user} summary={summary} summaryError={error} />
+    return <section className="dashboard-page dashboard-page--user">
+      <DashboardSidebar user={user} active="overview" />
+      <div className="dashboard-main">
+        <StudentDashboard user={user} summary={summary} summaryError={error} />
+      </div>
     </section>;
   }
-  return <section className="container dashboard-page dashboard-page--user">
-    <MemberDashboard user={user} summary={summary} summaryError={error} />
+  return <section className="dashboard-page dashboard-page--user">
+    <DashboardSidebar user={user} active="overview" />
+    <div className="dashboard-main">
+      <MemberDashboard user={user} summary={summary} summaryError={error} />
+    </div>
   </section>;
 }

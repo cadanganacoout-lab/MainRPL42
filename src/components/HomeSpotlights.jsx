@@ -24,14 +24,14 @@ function createGalleryHighlights(photos) {
   return [randomTopLeftPhoto, ...selectedPhotos.slice(1)];
 }
 
-function GalleryHighlightCard({ photo, index, isClosing }) {
+function GalleryHighlightCard({ photo, index, isClosing, isFeatured }) {
   const [imageStatus, setImageStatus] = useState("loading");
 
   return (
     <figure
       className={[
         "gallery-highlight-card",
-        index === 0 && "gallery-highlight-card--featured",
+        index === 0 && isFeatured && "gallery-highlight-card--featured",
         isClosing && "gallery-highlight-card--closing",
         imageStatus === "loaded" && "is-loaded",
         imageStatus === "loading" && "is-image-loading",
@@ -67,16 +67,14 @@ function GalleryHighlights({ photos, status }) {
 
   return (
     <section id="gallery-spotlight" className="home-spotlight home-gallery-spotlight" aria-labelledby="gallery-spotlight-title" tabIndex="-1">
-      <div
-        className="gallery-highlight-stage"
-        aria-busy={status === "loading"}
-      >
+      <div className="gallery-highlight-layout" aria-busy={status === "loading"}>
         <div className="spotlight-section-header">
           <div className="spotlight-heading">
             <h2 id="gallery-spotlight-title">{UI.spotlights.galleryTitle}</h2>
           </div>
           <a className="spotlight-link" href={UI.spotlights.galleryLink}>{UI.spotlights.galleryLinkLabel}</a>
         </div>
+        <div className="gallery-highlight-stage">
         {status === "loading" && (
           <>
             <span className="visually-hidden" role="status">Memuat foto galeri…</span>
@@ -103,6 +101,7 @@ function GalleryHighlights({ photos, status }) {
             photo={photo}
             index={index}
             isClosing={index === highlights.length - 1 && index > 0}
+            isFeatured={highlights.length > 2}
             key={photo.id || photo.url}
           />
         ))}
@@ -113,6 +112,7 @@ function GalleryHighlights({ photos, status }) {
               : "Belum ada foto galeri."}
           </p>
         )}
+        </div>
       </div>
     </section>
   );
@@ -166,7 +166,7 @@ function VideoHighlights() {
           )}
           {videoHighlights.map((video, index) => (
             <a
-              className="video-highlight-card"
+              className={`video-highlight-card${index === 0 && videoHighlights.length > 2 ? " video-highlight-card--featured" : ""}`}
               href={`#/video?id=${encodeURIComponent(video.id)}`}
               key={video.id}
               style={{ "--spotlight-index": index }}
