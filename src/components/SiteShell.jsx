@@ -364,7 +364,8 @@ export function SiteHeader({ activePage, introMode = false }) {
 
 export function SiteFooter({ isHome = false }) {
   const [wordmarkVisible, setWordmarkVisible] = useState(false);
-  const wordmarkLetters = Array.from(SITE.className);
+  const footerWordmark = `${SITE.className} - STERIDA`;
+  const wordmarkLetters = Array.from(footerWordmark);
   const wordmarkRef = React.useRef(null);
 
   useEffect(() => {
@@ -440,7 +441,7 @@ export function SiteFooter({ isHome = false }) {
           ref={wordmarkRef}
           className={`footer-wordmark${wordmarkVisible ? " is-revealed" : ""}`}
           role="img"
-          aria-label={SITE.className}
+          aria-label={footerWordmark}
         >
           <div className="footer-wordmark-row" aria-hidden="true">
             {wordmarkLetters.map((letter, index) => (
