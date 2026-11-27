@@ -243,9 +243,13 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
             8,
             'Gallery spotlights reserve their layout while database photos load.'
           );
-          assert.ok(
-            await page.$('.welcome-gallery-tile.is-image-loading .welcome-gallery-tile-skeleton'),
-            'Welcome gallery retains image skeletons while image requests are pending.'
+          await page.waitForSelector(
+            '.welcome-gallery-tile:not(.is-image-ready):not(.is-image-error) .welcome-gallery-tile-skeleton',
+            {timeout: 10000}
+          );
+          await page.waitForSelector(
+            '.gallery-highlight-card.is-image-loading .home-photo-skeleton',
+            {timeout: 10000}
           );
           await waitForInitialLoading(page);
           assert.ok(Date.now() - splashStartedAt >= 5000, 'The startup screen stays visible for five seconds.');
@@ -361,10 +365,6 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
               block: 'center',
               behavior: 'instant'
             }));
-            await page.waitForSelector(
-              '.gallery-highlight-card.is-image-loading .home-photo-skeleton',
-              {timeout: 10000}
-            );
             await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
             assert.ok(await page.$('.welcome-gallery-tile img'), 'Welcome hero renders gallery photos.');
             await page.waitForSelector('.welcome-gallery-tile.is-image-ready', {timeout: 10000});

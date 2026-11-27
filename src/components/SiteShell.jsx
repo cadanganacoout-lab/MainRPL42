@@ -306,7 +306,7 @@ export function SiteHeader({ activePage, introMode = false }) {
               <span className="nav-auth-loading" role="status">Memeriksa akun…</span>
             ) : user ? (
               <details className="account-menu">
-                <summary className="account-trigger">
+                <summary className="account-trigger" aria-label={`Akun ${user.displayName} — buka menu`}>
                   <span className="account-avatar" aria-hidden="true">
                     {user.displayName
                       .trim()

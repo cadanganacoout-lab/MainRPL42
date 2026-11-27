@@ -370,10 +370,10 @@ function DutyList({ date, agenda, students }) {
         const name = students.find(student => student.id === duty.studentId)?.nama || duty.text;
         if (!name) return null;
         return (
-        <li key={`${duty.studentId || duty.text}-${index}`}>
-          <span className="duty-avatar" aria-hidden="true">{initialsOf(name)}</span>
-          <span>{name}</span>
-        </li>
+          <li key={`${duty.studentId || duty.text}-${index}`}>
+            <span className="duty-avatar" aria-hidden="true">{initialsOf(name)}</span>
+            <span>{name}</span>
+          </li>
         );
       })}
     </ul>

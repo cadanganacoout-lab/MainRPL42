@@ -9,6 +9,7 @@ dist/
 docs/
 supabase/
 mongodb/
+.claude/
 
 # Local environment variables and secrets
 .env

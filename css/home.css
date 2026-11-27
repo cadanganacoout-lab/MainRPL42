@@ -10,8 +10,7 @@
   z-index: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  min-height: 100vh;
-  min-height: 100svh;
+  min-height: 100dvh;
   overflow: hidden;
   padding: clamp(72px, 14vh, 142px) 0 clamp(52px, 9vh, 88px);
   color: var(--color-text-primary);
@@ -1142,13 +1141,22 @@
   background: var(--color-border-strong);
   content: "";
   transition:
-    width var(--dur-base) var(--ease-out),
     background-color var(--dur-fast) ease-out;
+  transform: scaleX(1);
+  transform-origin: left center;
 }
 
 .motivation-dot[aria-current="true"]::before {
   width: 20px;
   background: var(--color-accent-strong);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motivation-dot[aria-current="true"]::before {
+    transition:
+      width var(--dur-base) var(--ease-out),
+      background-color var(--dur-fast) ease-out;
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
