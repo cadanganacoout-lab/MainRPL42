@@ -781,6 +781,13 @@ function AccountManager() {
   );
 }
 
+const ADMIN_QUICK_LINKS = [
+  { label: "Siswa & guru", description: "Edit profil siswa dan daftar guru.", href: "#/admin/data?kind=students" },
+  { label: "Galeri & video", description: "Unggah foto kegiatan dan tautan video.", href: "#/admin/data?kind=gallery" },
+  { label: "Akun siswa", description: "Atur username dan reset password.", href: "#/admin?tab=accounts" },
+  { label: "Jadwal & piket", description: "Perbarui jadwal pelajaran dan piket.", href: "#/admin?tab=schedule" },
+];
+
 function AdminDashboard({ route, user, summary, summaryError }) {
   const tab = useMemo(() => {
     const query = route?.search || window.location.hash.split("?")[1] || "";
@@ -799,12 +806,30 @@ function AdminDashboard({ route, user, summary, summaryError }) {
       <DashboardSidebar user={user} active={tab} />
       <div className="dashboard-main">
         <header className="dashboard-heading">
-          <span className="route-label">/admin</span>
+          <span className="route-label">PANEL ADMIN</span>
           <h1>{titles[tab][0]}</h1>
           <p>{titles[tab][1]}</p>
         </header>
         {tab === "overview" && (
-          <DashboardStats summary={summary} error={summaryError} />
+          <>
+            <DashboardStats summary={summary} error={summaryError} />
+            <section className="dashboard-panel" aria-labelledby="admin-quick-links-heading">
+              <div className="dashboard-panel-heading">
+                <div>
+                  <h2 id="admin-quick-links-heading">Akses cepat</h2>
+                  <p>Pilih bagian yang ingin dikelola.</p>
+                </div>
+              </div>
+              <nav className="dashboard-quick-links" aria-label="Menu pengelolaan admin">
+                {ADMIN_QUICK_LINKS.map(link => (
+                  <a className="dashboard-quick-link" href={link.href} key={link.href}>
+                    <strong>{link.label}</strong>
+                    <small>{link.description}</small>
+                  </a>
+                ))}
+              </nav>
+            </section>
+          </>
         )}
         {tab === "accounts" && <AccountManager />}
         {tab === "schedule" && <AgendaEditor mode="schedule" />}

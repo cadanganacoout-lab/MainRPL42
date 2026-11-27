@@ -294,41 +294,43 @@ export function AdminDataPage({ route }) {
       <DashboardSidebar user={user} active={activeSection} />
       <div className="admin-data-main">
         <header className="dashboard-heading">
-          <span className="route-label">/admin/data</span>
+          <span className="route-label">KELOLA DATA</span>
           <h1>{heading}</h1>
           <p>Kelola informasi yang tampil di website kelas.</p>
         </header>
 
-        <div className="admin-data-tabs" role="group" aria-label="Bagian data admin">
-          <button
-            type="button"
-            className="button-secondary"
-            aria-pressed={activeSection === "content"}
-            onClick={() => chooseKind("students")}
-          >
-            Siswa & guru
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            aria-pressed={activeSection === "media"}
-            onClick={() => chooseKind("gallery")}
-          >
-            Galeri & video
-          </button>
-        </div>
-        <div className="admin-data-tabs admin-data-subtabs" role="group" aria-label={heading}>
-          {(activeSection === "content" ? ["students", "teachers"] : ["gallery", "videos"]).map(item => (
+        <div className="admin-data-nav">
+          <div className="admin-data-tabs" role="group" aria-label="Bagian data admin">
             <button
               type="button"
-              className="button-secondary"
-              key={item}
-              aria-pressed={kind === item}
-              onClick={() => chooseKind(item)}
+              className="admin-data-tab"
+              aria-pressed={activeSection === "content"}
+              onClick={() => chooseKind("students")}
             >
-              {item === "students" ? "Siswa" : item === "teachers" ? "Guru" : item === "gallery" ? "Foto galeri" : "Video"}
+              Siswa & guru
             </button>
-          ))}
+            <button
+              type="button"
+              className="admin-data-tab"
+              aria-pressed={activeSection === "media"}
+              onClick={() => chooseKind("gallery")}
+            >
+              Galeri & video
+            </button>
+          </div>
+          <div className="admin-data-tabs admin-data-subtabs" role="group" aria-label={heading}>
+            {(activeSection === "content" ? ["students", "teachers"] : ["gallery", "videos"]).map(item => (
+              <button
+                type="button"
+                className="admin-data-tab"
+                key={item}
+                aria-pressed={kind === item}
+                onClick={() => chooseKind(item)}
+              >
+                {item === "students" ? "Siswa" : item === "teachers" ? "Guru" : item === "gallery" ? "Foto galeri" : "Video"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {notice && <p className="admin-data-notice" role="status">{notice}</p>}
@@ -358,8 +360,13 @@ export function AdminDataPage({ route }) {
               />
             )}
             <label className="admin-data-search">
-              Cari {kindLabel(kind)}
-              <input value={query} onChange={event => setQuery(event.target.value)} type="search" />
+              <span className="visually-hidden">Cari {kindLabel(kind)}</span>
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                type="search"
+                placeholder={`Cari ${kindLabel(kind)}…`}
+              />
             </label>
             {status === "loading" && <p role="status">Memuat data…</p>}
             {status === "error" && (
@@ -386,7 +393,9 @@ export function AdminDataPage({ route }) {
                           <div className="admin-record-card-copy">
                             <h3 title={recordTitle(kind, record)}>{recordTitle(kind, record) || "Tanpa judul"}</h3>
                             <p>{recordDescription(kind, record)}</p>
-                            <small>{active ? "Aktif" : "Diarsipkan"}</small>
+                            <small className={`admin-record-status${active ? " is-active" : ""}`}>
+                              {active ? "Aktif" : "Diarsipkan"}
+                            </small>
                           </div>
                         </div>
                         <div className="admin-record-actions">

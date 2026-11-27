@@ -285,6 +285,7 @@ function SiteApplication() {
     : Object.hasOwn(pages, route.page)
       ? route.page
       : null;
+  const isDashboardPage = ["dashboard", "admin", "card-saya"].includes(route.page);
 
   return (
     <>
@@ -309,7 +310,7 @@ function SiteApplication() {
             <RouteContent route={route} />
           </EnforcePasswordChange>
         </main>
-        <SiteFooter isHome={route.page === "beranda"} />
+        {!isDashboardPage && <SiteFooter isHome={route.page === "beranda"} />}
         <GlobalChatWidget routePage={route.page} />
       </div>
       {showInitialLoading && (

@@ -187,12 +187,12 @@ export function CardEditorPage() {
     <section className="dashboard-page dashboard-page--user dashboard-page--card-editor">
       <DashboardSidebar user={user} active="card" />
       <div className="dashboard-main">
-        <section className="container page-hero">
-          <span className="route-label">/card-saya</span>
+        <header className="dashboard-heading">
+          <span className="route-label">EDIT CARD</span>
           <h1>Edit card saya</h1>
-          <p>Perbarui informasi card yang ditautkan ke akun Anda.</p>
-        </section>
-        <section className="container card-editor-page">
+          <p>Perbarui fakta, portofolio, dan foto pada card siswa Anda.</p>
+        </header>
+        <section className="card-editor-page">
         {status === "loading" && <CardEditorLoading />}
         {status === "error" && (
           <div className="student-list-message" role="alert">

@@ -240,7 +240,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
           assert.ok(await page.$('.welcome-gallery-loading'), 'Welcome gallery shows skeletons while database photos load.');
           assert.equal(
             await page.$$eval('.gallery-highlight-card--skeleton', cards => cards.length),
-            8,
+            7,
             'Gallery spotlights reserve their layout while database photos load.'
           );
           await page.waitForSelector(
@@ -393,8 +393,8 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
               '.gallery-highlight-card img',
               images => images.map(image => image.getAttribute('src'))
             );
-            assert.equal(gallerySources.length, 8, 'Home page renders eight landscape gallery highlights.');
-            assert.equal(new Set(gallerySources).size, 8, 'Gallery highlights use distinct photos.');
+            assert.equal(gallerySources.length, 7, 'Home page renders seven bento gallery highlights.');
+            assert.equal(new Set(gallerySources).size, 7, 'Gallery highlights use distinct photos.');
             assert.ok(
               gallerySources.every(source => browserPhotos.some(photo => photo.url === source)),
               'Gallery highlights use only photos returned by the database API.'
@@ -426,10 +426,10 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
               title: card.querySelector('strong')?.textContent.trim(),
               poster: card.querySelector('img')?.getAttribute('src')
             })));
-            assert.equal(videoCards.length, 9, 'Video spotlight shows nine representative thumbnails.');
+            assert.equal(videoCards.length, 7, 'Video spotlight shows seven representative thumbnails.');
             assert.equal(
               new Set(videoCards.map(card => card.href)).size,
-              9,
+              7,
               'Each video card links to a distinct video.'
             );
             assert.ok(
@@ -437,37 +437,64 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
               'Video cards keep their titles, posters, and direct playback links.'
             );
             const spotlightBento = await page.evaluate(() => {
-              const measure = selector => {
-                const cards = [...document.querySelectorAll(selector)];
+              const measure = (layoutSelector, gridSelector, cardSelector) => {
+                const layout = document.querySelector(layoutSelector);
+                const grid = document.querySelector(gridSelector);
+                const cards = [...document.querySelectorAll(cardSelector)];
                 const featured = cards[0];
-                const next = cards[1];
+                const wide = cards[1];
+                const standard = cards[3];
+                const layoutBounds = layout.getBoundingClientRect();
+                const gridStyle = getComputedStyle(grid);
                 const featuredBounds = featured.getBoundingClientRect();
-                const nextBounds = next.getBoundingClientRect();
+                const wideBounds = wide.getBoundingClientRect();
+                const standardBounds = standard.getBoundingClientRect();
                 return {
+                  layoutHeight: layoutBounds.height,
+                  viewportHeight: window.innerHeight,
+                  gridColumns: gridStyle.gridTemplateColumns.split(' ').length,
+                  gridRows: gridStyle.gridTemplateRows.split(' ').length,
                   featuredWidth: featuredBounds.width,
                   featuredHeight: featuredBounds.height,
-                  standardWidth: nextBounds.width,
-                  standardHeight: nextBounds.height,
-                  className: featured.className,
-                  gridRowEnd: getComputedStyle(featured).gridRowEnd,
-                  gridColumnEnd: getComputedStyle(featured).gridColumnEnd
+                  wideWidth: wideBounds.width,
+                  wideHeight: wideBounds.height,
+                  standardWidth: standardBounds.width,
+                  standardHeight: standardBounds.height,
+                  featuredClassName: featured.className,
+                  wideClassName: wide.className
                 };
               };
               return {
-                gallery: measure('.gallery-highlight-card'),
-                video: measure('.video-highlight-card')
+                gallery: measure('.gallery-highlight-layout', '.gallery-highlight-stage', '.gallery-highlight-card'),
+                video: measure('.video-spotlight-layout', '.video-highlight-grid', '.video-highlight-card')
               };
             });
             for (const [section, layout] of Object.entries(spotlightBento)) {
+              assert.equal(layout.gridColumns, 4, `${section} uses a 4-column bento grid on desktop.`);
+              assert.equal(layout.gridRows, 3, `${section} uses a 3-row bento grid on desktop.`);
+              assert.ok(
+                layout.layoutHeight <= layout.viewportHeight - 65,
+                `${section} fits within calc(100vh - 70px) on desktop: ${JSON.stringify(layout)}`
+              );
               assert.ok(
                 layout.featuredWidth > layout.standardWidth * 1.7 &&
-                  layout.featuredHeight > layout.standardHeight * 1.5,
-                `${section} highlights use an oversized lead card: ${JSON.stringify(layout)}`
+                  layout.featuredHeight > layout.standardHeight * 1.7,
+                `${section} lead card spans 2x2: ${JSON.stringify(layout)}`
+              );
+              assert.ok(
+                layout.wideWidth > layout.standardWidth * 1.7 &&
+                  layout.featuredHeight > layout.wideHeight * 1.7,
+                `${section} side cards span 2x1: ${JSON.stringify(layout)}`
               );
               assert.match(
-                layout.className,
+                layout.featuredClassName,
                 /--featured/,
                 `${section} lead card receives its featured layout class.`
+              );
+              assert.match(
+                layout.wideClassName,
+                /--wide/,
+                `${section} side card receives its wide layout class.`
               );
             }
             await page.evaluate(() => document.getElementById('gallery-spotlight').scrollIntoView({
@@ -714,6 +741,31 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
 
           await page.setViewport({width: 390, height: 844});
           if (route === 'beranda') {
+            await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
+            await wait(150);
+            const mobileGalleryStreams = await page.$$eval(
+              '.welcome-gallery-stream',
+              streams => streams.map(stream => ({
+                direction: stream.dataset.direction,
+                animationName: getComputedStyle(stream.querySelector('.welcome-gallery-tile')).animationName
+              }))
+            );
+            assert.equal(mobileGalleryStreams.length, 2, 'Mobile hero renders two stacked image slider units.');
+            assert.deepEqual(
+              mobileGalleryStreams.map(stream => stream.direction),
+              ['forward', 'reverse'],
+              'Mobile hero sliders move in opposite directions.'
+            );
+            assert.notEqual(
+              mobileGalleryStreams[0].animationName,
+              mobileGalleryStreams[1].animationName,
+              'Mobile hero sliders use distinct opposing keyframes.'
+            );
+            fs.mkdirSync(SCREENSHOT_DIR, {recursive: true});
+            await page.screenshot({
+              path: path.join(SCREENSHOT_DIR, 'welcome-hero-mobile.png'),
+              fullPage: false
+            });
             await page.evaluate(() => {
               const hero = document.querySelector('.welcome-hero');
               window.scrollTo({
@@ -770,6 +822,22 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
             `${route} menu button should open the navigation.`
           );
           assert.ok(await page.$eval('.tabbar', nav => nav.classList.contains('open')));
+          if (route === 'beranda') {
+            await wait(240);
+            const mobileMenuChevrons = await page.$$eval(
+              '.nav-picker-trigger svg',
+              icons => icons.map(icon => Math.round(icon.getBoundingClientRect().right))
+            );
+            assert.equal(mobileMenuChevrons.length, 2);
+            assert.ok(
+              Math.abs(mobileMenuChevrons[0] - mobileMenuChevrons[1]) <= 2,
+              `Mobile navbar chevrons should align on the right edge: ${JSON.stringify(mobileMenuChevrons)}`
+            );
+            await page.screenshot({
+              path: path.join(SCREENSHOT_DIR, 'mobile-navbar-open.png'),
+              fullPage: false
+            });
+          }
           await page.click('.menu-toggle');
           assert.equal(await page.$eval('.menu-toggle', button => button.getAttribute('aria-expanded')), 'false');
           const previousTheme = await page.$eval('.theme-toggle', button => button.getAttribute('aria-pressed'));
@@ -1215,6 +1283,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       );
       await waitForInitialLoading(cardEditorPage);
       await cardEditorPage.waitForSelector('#card-fact-value-0');
+      assert.equal(await cardEditorPage.$('.site-footer'), null, 'Card editor page omits the site footer.');
       assert.match(
         await cardEditorPage.$eval('.dashboard-sidebar-account', node => node.textContent),
         /Browser Student/
@@ -1344,6 +1413,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       );
       await waitForInitialLoading(adminDashboardPage);
       await adminDashboardPage.waitForSelector('.admin-record-grid');
+      assert.equal(await adminDashboardPage.$('.site-footer'), null, 'Admin data editor omits the site footer.');
       assert.match(
         await adminDashboardPage.$eval('.dashboard-sidebar-account', node => node.textContent),
         /Browser Admin/
@@ -1479,6 +1549,7 @@ async function mockSiteApi(page, {galleryDelay = 0, imageDelay = 0} = {}) {
       );
       await waitForInitialLoading(memberDashboardPage);
       await memberDashboardPage.waitForSelector('.dashboard-sidebar-account');
+      assert.equal(await memberDashboardPage.$('.site-footer'), null, 'Dashboard pages omit the site footer.');
       assert.match(
         await memberDashboardPage.$eval('.dashboard-sidebar-account', node => node.textContent),
         /Browser Member/

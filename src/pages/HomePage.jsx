@@ -11,40 +11,62 @@ import { apiRequest } from "../lib/api.js";
 import "../../css/welcome-room.css";
 
 const GALLERY_SLICES = 16;
-const GALLERY_CAMERA = 1.6;
-const GALLERY_TILE_HEIGHT = 52;
-const GALLERY_TILE_WIDTH = 68;
 const GALLERY_ASPECT = 16 / 9;
 const GALLERY_GAP = 16;
-const GALLERY_CURVE = (80 * Math.PI) / 180;
 const GALLERY_SPEED = 5;
 
-function galleryArc(bend) {
+function galleryProfile(width) {
+  if (width > 0 && width <= 640) {
+    return {
+      dual: true,
+      camera: 2.8,
+      curve: (30 * Math.PI) / 180,
+      tileHeightPercent: 84,
+      tileWidthPercent: 64,
+      maskEdge: "6%",
+    };
+  }
+  return {
+    dual: false,
+    camera: 1.6,
+    curve: (80 * Math.PI) / 180,
+    tileHeightPercent: 52,
+    tileWidthPercent: 68,
+    maskEdge: "12%",
+  };
+}
+
+function galleryArc(bend, camera) {
   return (
-    (GALLERY_CAMERA - 1 + Math.cos(bend)) /
-    (2 * GALLERY_CAMERA * Math.sin(bend))
+    (camera - 1 + Math.cos(bend)) /
+    (2 * camera * Math.sin(bend))
   );
 }
 
 function measureGallery(width, height) {
+  const profile = galleryProfile(width);
+  const rowHeight = profile.dual ? Math.max(80, (height - 10) / 2) : height;
+  const arc = galleryArc(profile.curve, profile.camera);
   const tileHeight = Math.min(
-    (GALLERY_TILE_HEIGHT / 100) * height,
-    ((GALLERY_TILE_WIDTH / 100) * width) / GALLERY_ASPECT,
+    (profile.tileHeightPercent / 100) * rowHeight,
+    ((profile.tileWidthPercent / 100) * width) / GALLERY_ASPECT,
   );
-  const radius = width * galleryArc(GALLERY_CURVE);
+  const radius = width * arc;
   if (!(tileHeight > 0) || !(radius > 0)) {
-    return { columns: 2, sweep: 0, unit: 0, limit: 0 };
+    return { ...profile, arc, columns: 2, sweep: 0, unit: 0, limit: 0 };
   }
 
   const degrees = radians => (radians * 180) / Math.PI;
   const unit = degrees(tileHeight / radius);
   const pitch = (GALLERY_ASPECT + GALLERY_GAP / 100) * unit;
-  const limit = degrees(GALLERY_CURVE) + (GALLERY_ASPECT * unit) / 2;
+  const limit = degrees(profile.curve) + (GALLERY_ASPECT * unit) / 2;
   const columns = Math.min(60, Math.max(2, Math.ceil((2 * limit) / pitch)));
   const round = value => Number(value.toFixed(4));
   const sweep = round((columns * pitch) / 2);
 
   return {
+    ...profile,
+    arc,
     columns,
     sweep,
     unit: round(unit),
@@ -72,7 +94,8 @@ function WelcomeGallery({ photos, status }) {
       setLayout(previous =>
         previous.columns === next.columns &&
         previous.sweep === next.sweep &&
-        previous.unit === next.unit
+        previous.unit === next.unit &&
+        previous.curve === next.curve
           ? previous
           : next
       );
@@ -98,26 +121,44 @@ function WelcomeGallery({ photos, status }) {
     return () => observer.disconnect();
   }, []);
 
-  const { columns, sweep, unit, limit } = layout;
-  const radius = `${Number((100 * galleryArc(GALLERY_CURVE)).toFixed(3))}cqw`;
+  const {
+    arc,
+    camera,
+    columns,
+    dual,
+    limit,
+    maskEdge,
+    sweep,
+    tileHeightPercent,
+    tileWidthPercent,
+    unit,
+  } = layout;
+  const radius = `${Number((100 * arc).toFixed(3))}cqw`;
   const size = value =>
-    `calc(${Number(value.toFixed(4))} * min(${GALLERY_TILE_HEIGHT}cqh, ${Number(
-      (GALLERY_TILE_WIDTH / GALLERY_ASPECT).toFixed(4),
+    `calc(${Number(value.toFixed(4))} * min(${tileHeightPercent}cqh, ${Number(
+      (tileWidthPercent / GALLERY_ASPECT).toFixed(4),
     )}cqw))`;
   const turn = degrees =>
     `translateZ(${radius}) rotateY(${Number(degrees.toFixed(4))}deg) translateZ(-${radius})`;
   const duration = columns * GALLERY_SPEED;
   const hide = Number((((sweep - limit) / (2 * sweep || 1)) * 100).toFixed(4));
-  const animation = `@keyframes ${orbitClass}{from{transform:${turn(-sweep)}}to{transform:${turn(sweep)}}0%,${hide}%,${100 - hide}%,100%{visibility:hidden}${hide + 0.001}%,${100 - hide - 0.001}%{visibility:visible}}`;
+  const rows = dual ? [1, -1] : [1];
+  const animation = rows.map((direction, rowIndex) => {
+    const startAngle = direction > 0 ? -sweep : sweep;
+    const endAngle = direction > 0 ? sweep : -sweep;
+    return `@keyframes ${orbitClass}-${rowIndex}{from{transform:${turn(startAngle)}}to{transform:${turn(endAngle)}}0%,${hide}%,${100 - hide}%,100%{visibility:hidden}${hide + 0.001}%,${100 - hide - 0.001}%{visibility:visible}}`;
+  }).join("");
+  const maskFarEdge = `${100 - Number.parseFloat(maskEdge)}%`;
+  const ready = status !== "loading" && status !== "error" && photos.length > 0;
 
   return (
     <div
       ref={ref}
-      className="welcome-gallery"
+      className={`welcome-gallery${ready && dual ? " welcome-gallery--dual" : ""}`}
       role="region"
       aria-label="Foto kegiatan kelas XI RPL"
       aria-busy={status === "loading"}
-      style={{ containerType: "size" }}
+      style={ready && dual ? undefined : { containerType: "size" }}
     >
       {status === "loading" ? (
         <div className="welcome-gallery-loading" role="status">
@@ -142,110 +183,121 @@ function WelcomeGallery({ photos, status }) {
       ) : (
         <>
           <style>{animation}</style>
-          <div
-            className="welcome-gallery-stream"
-            style={{
-              perspective: `${Number((100 * galleryArc(GALLERY_CURVE) * GALLERY_CAMERA).toFixed(3))}cqw`,
-              perspectiveOrigin: "50% 50%",
-              maskImage: "linear-gradient(90deg, transparent, var(--color-canvas) 12%, var(--color-canvas) 88%, transparent)",
-              WebkitMaskImage: "linear-gradient(90deg, transparent, var(--color-canvas) 12%, var(--color-canvas) 88%, transparent)",
-            }}
-          >
-        {Array.from({ length: columns }, (_, tileIndex) => {
-          const firstPhoto = columns - 1 - tileIndex;
-          const photoIndex = (shownPhotos[tileIndex] ?? firstPhoto) % photos.length;
-          const photo = photos[photoIndex];
-          const imageReady = loadedPhotos.has(photo.url);
-          const imageFailed = failedPhotos.has(photo.url);
+          {rows.map((direction, rowIndex) => {
+            const photoOffset = rowIndex === 0 ? 0 : Math.max(1, Math.floor(photos.length / 2));
+            const phaseOffset = rowIndex === 0 ? 0 : -GALLERY_SPEED / 2;
 
-          return (
-            <div
-              className={[
-                "welcome-gallery-tile",
-                tileClass,
-                imageReady && "is-image-ready",
-                imageFailed && "is-image-error",
-                !imageReady && !imageFailed && "is-image-loading",
-              ].filter(Boolean).join(" ")}
-              key={tileIndex}
-              role="img"
-              aria-label={photo.caption || "Kegiatan kelas XI RPL"}
-              style={{
-                left: `calc(50% - ${size(GALLERY_ASPECT / 2)})`,
-                top: `calc(50% - ${size(0.5)})`,
-                width: size(GALLERY_ASPECT),
-                height: size(1),
-                transformStyle: "preserve-3d",
-                animation: `${orbitClass} ${duration}s linear ${-tileIndex * GALLERY_SPEED}s infinite`,
-              }}
-              onAnimationIteration={event => {
-                const lap = Math.round(event.elapsedTime / duration);
-                const nextPhoto = lap * columns + firstPhoto;
-                setShownPhotos(previous =>
-                  previous[tileIndex] === nextPhoto
-                    ? previous
-                    : { ...previous, [tileIndex]: nextPhoto }
-                );
-              }}
-            >
-              <span className="home-photo-skeleton welcome-gallery-tile-skeleton" aria-hidden="true" />
-              {Array.from({ length: GALLERY_SLICES }, (_, sliceIndex) => {
-                const share = GALLERY_ASPECT / GALLERY_SLICES;
-                const radiusOffset =
-                  (GALLERY_ASPECT / 2 - (sliceIndex + 0.5) * share) * unit;
+            return (
+              <div
+                key={rowIndex}
+                className="welcome-gallery-stream"
+                data-direction={direction > 0 ? "forward" : "reverse"}
+                style={{
+                  ...(dual ? { containerType: "size" } : {}),
+                  perspective: `${Number((100 * arc * camera).toFixed(3))}cqw`,
+                  perspectiveOrigin: "50% 50%",
+                  maskImage: `linear-gradient(90deg, transparent, var(--color-canvas) ${maskEdge}, var(--color-canvas) ${maskFarEdge}, transparent)`,
+                  WebkitMaskImage: `linear-gradient(90deg, transparent, var(--color-canvas) ${maskEdge}, var(--color-canvas) ${maskFarEdge}, transparent)`,
+                }}
+              >
+                {Array.from({ length: columns }, (_, tileIndex) => {
+                  const firstPhoto = photoOffset + (columns - 1 - tileIndex);
+                  const tileKey = `${rowIndex}-${tileIndex}`;
+                  const photoIndex = (shownPhotos[tileKey] ?? firstPhoto) % photos.length;
+                  const photo = photos[photoIndex];
+                  const imageReady = loadedPhotos.has(photo.url);
+                  const imageFailed = failedPhotos.has(photo.url);
 
-                return (
-                  <div
-                    key={sliceIndex}
-                    className="welcome-gallery-slice"
-                    aria-hidden="true"
-                    style={{
-                      left: size((GALLERY_ASPECT - share) / 2),
-                      width: sliceIndex === GALLERY_SLICES - 1
-                        ? size(share)
-                        : `calc(${size(share)} + 1px)`,
-                      height: size(1),
-                      transform: turn(radiusOffset),
-                      borderRadius: sliceIndex === 0
-                        ? "10px 0 0 10px"
-                        : sliceIndex === GALLERY_SLICES - 1
-                          ? "0 10px 10px 0"
-                          : undefined,
-                    }}
-                  >
-                    <img
-                      src={photo.url}
-                      alt=""
-                      draggable={false}
-                      loading="eager"
-                      decoding="async"
-                      onLoad={() => {
-                        setLoadedPhotos(current => (
-                          current.has(photo.url)
-                            ? current
-                            : new Set(current).add(photo.url)
-                        ));
-                      }}
-                      onError={() => {
-                        setFailedPhotos(current => (
-                          current.has(photo.url)
-                            ? current
-                            : new Set(current).add(photo.url)
-                        ));
-                      }}
+                  return (
+                    <div
+                      className={[
+                        "welcome-gallery-tile",
+                        tileClass,
+                        imageReady && "is-image-ready",
+                        imageFailed && "is-image-error",
+                        !imageReady && !imageFailed && "is-image-loading",
+                      ].filter(Boolean).join(" ")}
+                      key={tileKey}
+                      role="img"
+                      aria-label={photo.caption || "Kegiatan kelas XI RPL"}
                       style={{
-                        left: size(-sliceIndex * share),
+                        left: `calc(50% - ${size(GALLERY_ASPECT / 2)})`,
+                        top: `calc(50% - ${size(0.5)})`,
                         width: size(GALLERY_ASPECT),
                         height: size(1),
+                        transformStyle: "preserve-3d",
+                        animation: `${orbitClass}-${rowIndex} ${duration}s linear ${-tileIndex * GALLERY_SPEED + phaseOffset}s infinite`,
                       }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-          </div>
+                      onAnimationIteration={event => {
+                        const lap = Math.round(event.elapsedTime / duration);
+                        const nextPhoto = lap * columns + firstPhoto;
+                        setShownPhotos(previous =>
+                          previous[tileKey] === nextPhoto
+                            ? previous
+                            : { ...previous, [tileKey]: nextPhoto }
+                        );
+                      }}
+                    >
+                      <span className="home-photo-skeleton welcome-gallery-tile-skeleton" aria-hidden="true" />
+                      {Array.from({ length: GALLERY_SLICES }, (_, sliceIndex) => {
+                        const share = GALLERY_ASPECT / GALLERY_SLICES;
+                        const radiusOffset =
+                          (GALLERY_ASPECT / 2 - (sliceIndex + 0.5) * share) * unit;
+
+                        return (
+                          <div
+                            key={sliceIndex}
+                            className="welcome-gallery-slice"
+                            aria-hidden="true"
+                            style={{
+                              left: size((GALLERY_ASPECT - share) / 2),
+                              width: sliceIndex === GALLERY_SLICES - 1
+                                ? size(share)
+                                : `calc(${size(share)} + 1px)`,
+                              height: size(1),
+                              transform: turn(radiusOffset),
+                              borderRadius: sliceIndex === 0
+                                ? "10px 0 0 10px"
+                                : sliceIndex === GALLERY_SLICES - 1
+                                  ? "0 10px 10px 0"
+                                  : undefined,
+                            }}
+                          >
+                            <img
+                              src={photo.url}
+                              alt=""
+                              draggable={false}
+                              loading="eager"
+                              decoding="async"
+                              onLoad={() => {
+                                setLoadedPhotos(current => (
+                                  current.has(photo.url)
+                                    ? current
+                                    : new Set(current).add(photo.url)
+                                ));
+                              }}
+                              onError={() => {
+                                setFailedPhotos(current => (
+                                  current.has(photo.url)
+                                    ? current
+                                    : new Set(current).add(photo.url)
+                                ));
+                              }}
+                              style={{
+                                left: size(-sliceIndex * share),
+                                width: size(GALLERY_ASPECT),
+                                height: size(1),
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </>
       )}
     </div>

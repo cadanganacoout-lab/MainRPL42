@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { UI } from "../data/class-data.js";
 import { apiRequest } from "../lib/api.js";
 
-const VIDEO_HIGHLIGHT_COUNT = 9;
+const GALLERY_HIGHLIGHT_COUNT = 7;
+const VIDEO_HIGHLIGHT_COUNT = 7;
+
 function selectVideoHighlights(videos) {
   return videos.length <= VIDEO_HIGHLIGHT_COUNT
     ? videos
@@ -15,8 +17,8 @@ function createGalleryHighlights(photos) {
   const galleryPhotoPool = photos
     .filter(photo => typeof photo.url === "string" && photo.url.trim())
     .filter((photo, index, items) => items.findIndex(item => item.url === photo.url) === index);
-  const selectedPhotos = galleryPhotoPool.slice(0, 8);
-  const alternatePhotos = galleryPhotoPool.slice(8);
+  const selectedPhotos = galleryPhotoPool.slice(0, GALLERY_HIGHLIGHT_COUNT);
+  const alternatePhotos = galleryPhotoPool.slice(GALLERY_HIGHLIGHT_COUNT);
 
   if (alternatePhotos.length === 0 || selectedPhotos.length === 0) return selectedPhotos;
 
@@ -24,15 +26,21 @@ function createGalleryHighlights(photos) {
   return [randomTopLeftPhoto, ...selectedPhotos.slice(1)];
 }
 
-function GalleryHighlightCard({ photo, index, isClosing, isFeatured }) {
+function getBentoModifierClass(prefix, index, hasBentoSlots) {
+  if (!hasBentoSlots) return "";
+  if (index === 0) return `${prefix}--featured`;
+  if (index === 1 || index === 2) return `${prefix}--wide`;
+  return "";
+}
+
+function GalleryHighlightCard({ photo, index, hasBentoSlots }) {
   const [imageStatus, setImageStatus] = useState("loading");
 
   return (
     <figure
       className={[
         "gallery-highlight-card",
-        index === 0 && isFeatured && "gallery-highlight-card--featured",
-        isClosing && "gallery-highlight-card--closing",
+        getBentoModifierClass("gallery-highlight-card", index, hasBentoSlots),
         imageStatus === "loaded" && "is-loaded",
         imageStatus === "loading" && "is-image-loading",
         imageStatus === "error" && "has-image-error",
@@ -78,13 +86,12 @@ function GalleryHighlights({ photos, status }) {
         {status === "loading" && (
           <>
             <span className="visually-hidden" role="status">Memuat foto galeri…</span>
-            {Array.from({ length: 8 }, (_, index) => (
+            {Array.from({ length: GALLERY_HIGHLIGHT_COUNT }, (_, index) => (
               <figure
                 className={[
                   "gallery-highlight-card",
                   "gallery-highlight-card--skeleton",
-                  index === 0 && "gallery-highlight-card--featured",
-                  index === 7 && "gallery-highlight-card--closing",
+                  getBentoModifierClass("gallery-highlight-card", index, true),
                 ].filter(Boolean).join(" ")}
                 key={index}
                 aria-hidden="true"
@@ -100,8 +107,7 @@ function GalleryHighlights({ photos, status }) {
           <GalleryHighlightCard
             photo={photo}
             index={index}
-            isClosing={index === highlights.length - 1 && index > 0}
-            isFeatured={highlights.length > 2}
+            hasBentoSlots={highlights.length > 2}
             key={photo.id || photo.url}
           />
         ))}
@@ -155,7 +161,7 @@ function VideoHighlights() {
           <a className="spotlight-link" href={UI.spotlights.videoLink}>{UI.spotlights.videoLinkLabel}</a>
         </div>
         <div className="video-highlight-grid">
-          {status === "loading" && <p role="status">Memuat video…</p>}
+          {status === "loading" && <p className="gallery-highlight-empty" role="status">Memuat video…</p>}
           {status === "error" && (
             <div className="gallery-highlight-empty" role="alert">
               <p>Video belum dapat dimuat.</p>
@@ -166,14 +172,17 @@ function VideoHighlights() {
           )}
           {videoHighlights.map((video, index) => (
             <a
-              className={`video-highlight-card${index === 0 && videoHighlights.length > 2 ? " video-highlight-card--featured" : ""}`}
+              className={[
+                "video-highlight-card",
+                getBentoModifierClass("video-highlight-card", index, videoHighlights.length > 2),
+              ].filter(Boolean).join(" ")}
               href={`#/video?id=${encodeURIComponent(video.id)}`}
               key={video.id}
               style={{ "--spotlight-index": index }}
             >
               <span className="video-highlight-media">
                 <img
-                  src={`https://img.youtube.com/vi/${encodeURIComponent(video.youtubeId)}/hqdefault.jpg`}
+                  src={`https://img.youtube.com/vi/${encodeURIComponent(video.youtubeId)}/mqdefault.jpg`}
                   alt=""
                   loading="lazy"
                   decoding="async"
